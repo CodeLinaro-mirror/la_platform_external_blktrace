@@ -44,6 +44,7 @@ LIST_HEAD(all_ios);
 LIST_HEAD(free_ios);
 LIST_HEAD(free_bilinks);
 __u64 q_histo[N_HIST_BKTS], d_histo[N_HIST_BKTS];
+__u32 r_latency_histo[N_READ_HIST_BINS], w_latency_histo[N_WRITE_HIST_BINS];
 
 double plat_freq = 0.0;
 double range_delta = 0.1;

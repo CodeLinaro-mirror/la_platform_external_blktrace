@@ -47,25 +47,43 @@ FILE *latency_open(struct d_info *dip, char *name, char *post)
 
 void latency_alloc(struct d_info *dip)
 {
-	dip->q2d_ofp = latency_open(dip, q2d_name, "q2d");
-	dip->d2c_ofp = latency_open(dip, d2c_name, "d2c");
-	dip->q2c_ofp = latency_open(dip, q2c_name, "q2c");
+	dip->q2d_ofp	= latency_open(dip, q2d_name, "q2d");
+	dip->q2d_rofp	= latency_open(dip, q2d_name, "rq2d");
+	dip->q2d_wofp	= latency_open(dip, q2d_name, "wq2d");
+	dip->d2c_ofp	= latency_open(dip, d2c_name, "d2c");
+	dip->d2c_rofp	= latency_open(dip, d2c_name, "rd2c");
+	dip->d2c_wofp	= latency_open(dip, d2c_name, "wd2c");
+	dip->q2c_ofp	= latency_open(dip, q2c_name, "q2c");
+	dip->q2c_rofp	= latency_open(dip, q2c_name, "rq2c");
+	dip->q2c_wofp	= latency_open(dip, q2c_name, "wq2c");
 }
 
-void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency)
+void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency, int rw)
 {
 	plat_x2c(dip->q2d_plat_handle, tstamp, latency);
 	latency_out(dip->q2d_ofp, tstamp, latency);
+	if (rw)
+		latency_out(dip->q2d_rofp, tstamp, latency);
+	else
+		latency_out(dip->q2d_wofp, tstamp, latency);
 }
 
-void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency)
+void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw)
 {
 	plat_x2c(dip->d2c_plat_handle, tstamp, latency);
 	latency_out(dip->d2c_ofp, tstamp, latency);
+	if (rw)
+		latency_out(dip->d2c_rofp, tstamp, latency);
+	else
+		latency_out(dip->d2c_wofp, tstamp, latency);
 }
 
-void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency)
+void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw)
 {
 	plat_x2c(dip->q2c_plat_handle, tstamp, latency);
 	latency_out(dip->q2c_ofp, tstamp, latency);
+	if (rw)
+		latency_out(dip->q2c_rofp, tstamp, latency);
+	else
+		latency_out(dip->q2c_wofp, tstamp, latency);
 }

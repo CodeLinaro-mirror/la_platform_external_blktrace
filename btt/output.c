@@ -702,6 +702,18 @@ void output_p_live(FILE *ofp)
 	fprintf(ofp, "\n");
 }
 
+struct tQs_info {
+	__u64 t_rqs;
+	__u64 t_wqs;
+} tQs_info;
+
+void __dip_output_tQs(struct d_info *dip, void *arg)
+{
+	(void)arg;
+	tQs_info.t_rqs += dip->n_rqs;
+	tQs_info.t_wqs += dip->n_wqs;
+}
+
 void output_histos(void)
 {
 	int i;
@@ -736,6 +748,37 @@ void output_histos(void)
 		fprintf(ofp, "%4d %lld\n", (i+1), (long long)d_histo[i]);
 	fprintf(ofp, "\n# D bucket for > %d\n%4d %lld\n", (int)N_HIST_BKTS-1,
 		N_HIST_BKTS-1, (long long)d_histo[N_HIST_BKTS-1]);
+	fclose(ofp);
+
+	/* Read/Write latency histogram */
+	dip_foreach_out(__dip_output_tQs, ofp);
+
+	snprintf(fname, 255, "%s_r_latency_hist.dat", output_name);
+	ofp = my_fopen(fname, "w");
+	if (!ofp) {
+		perror(fname);
+		return;
+	}
+	for (i = 0; i < N_READ_HIST_BINS; i++) {
+		if (r_latency_histo[i])
+			fprintf(ofp, "%d\t%f\n", i,
+				((double)r_latency_histo[i] /
+				(double)tQs_info.t_rqs) * 100);
+	}
+	fclose(ofp);
+
+	snprintf(fname, 255, "%s_w_latency_hist.dat", output_name);
+	ofp = my_fopen(fname, "w");
+	if (!ofp) {
+		perror(fname);
+		return;
+	}
+	for (i = 0; i < N_WRITE_HIST_BINS; i++) {
+		if (w_latency_histo[i])
+			fprintf(ofp, "%d\t%f\n", i,
+				((double)w_latency_histo[i] /
+				(double)tQs_info.t_wqs) * 100);
+	}
 	fclose(ofp);
 }
 

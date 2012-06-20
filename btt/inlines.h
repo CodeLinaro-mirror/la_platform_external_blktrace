@@ -353,6 +353,20 @@ static inline void update_d_histo(__u64 nbytes)
 	d_histo[histo_idx(nbytes)]++;
 }
 
+static inline void update_latency_histo(__u64 nbytes, __u64 latency, int rw)
+{
+	double latency_per_block = (double)latency / (double)(nbytes >> 9);
+	int idx = 0;
+
+	if (rw) {
+		idx = min((int) round(TO_MSEC(latency_per_block)), N_READ_HIST_BINS -1);
+		r_latency_histo[idx]++;
+	} else {
+		idx = min((int) round(TO_MSEC(latency_per_block)), N_WRITE_HIST_BINS -1);
+		w_latency_histo[idx]++;
+	}
+}
+
 static inline struct io *io_first_list(struct list_head *head)
 {
 	if (list_empty(head))

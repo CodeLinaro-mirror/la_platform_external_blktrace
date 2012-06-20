@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 #include "blktrace.h"
 #include "rbtree.h"
@@ -35,6 +36,9 @@
  * 1024 == > 1024 blks
  */
 #define N_HIST_BKTS	1025
+
+#define N_READ_HIST_BINS	60001
+#define N_WRITE_HIST_BINS	60001
 
 #define BIT_TIME(t)	((double)SECONDS(t) + ((double)NANO_SECONDS(t) / 1.0e9))
 
@@ -135,10 +139,12 @@ struct d_info {
 	void *q2q_handle, *seek_handle, *bno_dump_handle, *up_hist_handle;
 	void *q2d_priv, *aqd_handle, *rstat_handle, *p_live_handle;
 	void *q2d_plat_handle, *q2c_plat_handle, *d2c_plat_handle;
-	FILE *q2d_ofp, *d2c_ofp, *q2c_ofp, *pit_fp;
+	FILE *q2d_ofp, *q2d_rofp, *q2d_wofp;
+	FILE *d2c_ofp, *d2c_rofp, *d2c_wofp;
+	FILE *q2c_ofp, *q2c_rofp, *q2c_wofp, *pit_fp;
 	struct avgs_info avgs;
 	struct stats stats, all_stats;
-	__u64 last_q, n_qs, n_ds;
+	__u64 last_q, n_qs, n_rqs, n_wqs, n_ds;
 	__u64 n_act_q, t_act_q;	/* # currently active when Q comes in */
 	__u32 device;
 
@@ -191,6 +197,7 @@ extern __u64 iostat_interval, iostat_last_stamp;
 extern time_t genesis, last_vtrace;
 extern double t_astart, t_aend;
 extern __u64 q_histo[N_HIST_BKTS], d_histo[N_HIST_BKTS];
+extern __u32 r_latency_histo[N_READ_HIST_BINS], w_latency_histo[N_WRITE_HIST_BINS];
 
 /* args.c */
 void handle_args(int argc, char *argv[]);
@@ -200,6 +207,7 @@ void clean_args();
 void *aqd_alloc(struct d_info *dip);
 void aqd_free(void *info);
 void aqd_clean(void);
+void aqd_queue(struct d_info *dip, int rw);
 void aqd_issue(void *info, double ts);
 void aqd_complete(void *info, double ts);
 
@@ -243,9 +251,9 @@ void iostat_dump_stats(__u64 stamp, int all);
 /* latency.c */
 void latency_alloc(struct d_info *dip);
 void latency_clean(void);
-void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency);
-void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency);
-void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency);
+void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
+void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
+void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
 
 /* misc.c */
 void add_file(FILE *fp, char *oname);
@@ -306,7 +314,7 @@ void q2d_acc(void *a1, void *a2);
 /* rstats.c */
 void *rstat_alloc(struct d_info *dip);
 void rstat_free(void *ptr);
-void rstat_add(void *ptr, double cur, unsigned long long nblks);
+void rstat_add(void *ptr, double cur, unsigned long long nblks, int rw);
 int rstat_init(void);
 void rstat_exit(void);
 
