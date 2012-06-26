@@ -276,7 +276,11 @@ static int verbose;
 static unsigned int act_mask = -1U;
 static int stats_printed;
 static int bin_output_msgs = 1;
+#ifdef PROFILER
+extern int data_is_native;
+#else
 int data_is_native = -1;
+#endif
 
 static FILE *dump_fp;
 static char *dump_binary;
@@ -2716,12 +2720,104 @@ static void usage(char *prog)
 	fprintf(stderr, "Usage: %s %s", prog, usage_str);
 }
 
-int main(int argc, char *argv[])
+int run_blkparse()
 {
-	int i, c, ret, mode;
-	int act_mask_tmp = 0;
+	int ret = 0, mode = 0;
 	char *ofp_buffer = NULL;
 	char *bin_ofp_buffer = NULL;
+
+	memset(&rb_sort_root, 0, sizeof(rb_sort_root));
+
+	signal(SIGINT, handle_sigint);
+	signal(SIGHUP, handle_sigint);
+	signal(SIGTERM, handle_sigint);
+
+	setlocale(LC_NUMERIC, "en_US");
+
+	if (text_output) {
+		if (!output_name) {
+			ofp = fdopen(STDOUT_FILENO, "w");
+			mode = _IOLBF;
+		} else {
+			char ofname[128];
+
+			snprintf(ofname, sizeof(ofname) - 1, "%s", output_name);
+			ofp = fopen(ofname, "w");
+			mode = _IOFBF;
+		}
+
+		if (!ofp) {
+			perror("fopen");
+			return 1;
+		}
+
+		ofp_buffer = malloc(4096);
+		if (setvbuf(ofp, ofp_buffer, mode, 4096)) {
+			perror("setvbuf");
+			return 1;
+		}
+	}
+
+	if (dump_binary) {
+		if (!strcmp(dump_binary, "-"))
+			dump_fp = stdout;
+		else {
+			dump_fp = fopen(dump_binary, "w");
+			if (!dump_fp) {
+				perror(dump_binary);
+				dump_binary = NULL;
+				return 1;
+			}
+		}
+		bin_ofp_buffer = malloc(128 * 1024);
+		if (setvbuf(dump_fp, bin_ofp_buffer, _IOFBF, 128 * 1024)) {
+			perror("setvbuf binary");
+			return 1;
+		}
+	}
+
+	if (pipeline)
+		ret = do_fifo();
+	else
+		ret = do_file();
+
+	if (!ret)
+		show_stats();
+
+	if (have_drv_data && !dump_binary)
+		printf("\ndiscarded traces containing low-level device driver "
+		       "specific data (only available in binary output)\n");
+
+	if (ofp_buffer) {
+		fflush(ofp);
+		free(ofp_buffer);
+	}
+	if (bin_ofp_buffer) {
+		fflush(dump_fp);
+		free(bin_ofp_buffer);
+	}
+	return ret;
+}
+
+#ifdef PROFILER
+int start_blkparse(char *file)
+{
+	char buf_txt[128];
+	char buf_bin[128];
+
+	snprintf(buf_txt, sizeof(buf_txt) - 1, "%s.txt", file);
+	output_name = buf_txt;
+	snprintf(buf_bin, sizeof(buf_bin) - 1, "%s.bin", file);
+	dump_binary = buf_bin;
+	if (resize_devices(file) != 0) return 1;
+
+	return run_blkparse();
+}
+#else
+int main(int argc, char *argv[])
+{
+	int i, c;
+	int act_mask_tmp = 0;
 
 	while ((c = getopt_long(argc, argv, S_OPTS, l_opts, NULL)) != -1) {
 		switch (c) {
@@ -2824,75 +2920,6 @@ int main(int argc, char *argv[])
 	if (act_mask_tmp != 0)
 		act_mask = act_mask_tmp;
 
-	memset(&rb_sort_root, 0, sizeof(rb_sort_root));
-
-	signal(SIGINT, handle_sigint);
-	signal(SIGHUP, handle_sigint);
-	signal(SIGTERM, handle_sigint);
-
-	setlocale(LC_NUMERIC, "en_US");
-
-	if (text_output) {
-		if (!output_name) {
-			ofp = fdopen(STDOUT_FILENO, "w");
-			mode = _IOLBF;
-		} else {
-			char ofname[PATH_MAX];
-
-			snprintf(ofname, sizeof(ofname) - 1, "%s", output_name);
-			ofp = fopen(ofname, "w");
-			mode = _IOFBF;
-		}
-
-		if (!ofp) {
-			perror("fopen");
-			return 1;
-		}
-
-		ofp_buffer = malloc(4096);
-		if (setvbuf(ofp, ofp_buffer, mode, 4096)) {
-			perror("setvbuf");
-			return 1;
-		}
-	}
-
-	if (dump_binary) {
-		if (!strcmp(dump_binary, "-"))
-			dump_fp = stdout;
-		else {
-			dump_fp = fopen(dump_binary, "w");
-			if (!dump_fp) {
-				perror(dump_binary);
-				dump_binary = NULL;
-				return 1;
-			}
-		}
-		bin_ofp_buffer = malloc(128 * 1024);
-		if (setvbuf(dump_fp, bin_ofp_buffer, _IOFBF, 128 * 1024)) {
-			perror("setvbuf binary");
-			return 1;
-		}
-	}
-
-	if (pipeline)
-		ret = do_fifo();
-	else
-		ret = do_file();
-
-	if (!ret)
-		show_stats();
-
-	if (have_drv_data && !dump_binary)
-		printf("\ndiscarded traces containing low-level device driver "
-		       "specific data (only available in binary output)\n");
-
-	if (ofp_buffer) {
-		fflush(ofp);
-		free(ofp_buffer);
-	}
-	if (bin_ofp_buffer) {
-		fflush(dump_fp);
-		free(bin_ofp_buffer);
-	}
-	return ret;
+	return run_blkparse();
 }
+#endif

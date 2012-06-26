@@ -56,11 +56,10 @@ struct region_info all_regions = {
 };
 
 int process(void);
+extern void btt_setup();
 
-int main(int argc, char *argv[])
+int run_btt()
 {
-	handle_args(argc, argv);
-
 	init_dev_heads();
 	iostat_init();
 	if (!rstat_init())
@@ -95,6 +94,25 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
+#ifdef PROFILER
+int start_btt(char *file)
+{
+	char buf[128];
+
+	output_name = file;
+	snprintf(buf, sizeof(buf) - 1, "%s.bin", file);
+	input_name = buf;
+
+	btt_setup();
+	return run_btt();
+}
+#else
+int main(int argc, char *argv[])
+{
+	handle_args(argc, argv);
+	return run_btt();
+}
+#endif
 
 static inline double tv2dbl(struct timeval *tv)
 {
