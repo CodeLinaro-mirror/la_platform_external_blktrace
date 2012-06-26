@@ -2428,15 +2428,13 @@ static int setup_file(struct per_dev_info *pdi, int cpu)
 
 	p = strdup(pdi->name);
 	dname = dirname(p);
-	if (strcmp(dname, ".")) {
-		input_dir = dname;
-		p = strdup(pdi->name);
-		strcpy(pdi->name, basename(p));
+	if (!strcmp(dname, ".")) {
+		if (!input_dir)
+			input_dir = ".";
+		len = snprintf(pci->fname, strlen(input_dir)+2,
+				"%s/", input_dir);
 	}
 	free(p);
-
-	if (input_dir)
-		len = sprintf(pci->fname, "%s/", input_dir);
 
 	snprintf(pci->fname + len, sizeof(pci->fname)-1-len,
 		 "%s.blktrace.%d", pdi->name, pci->cpu);
