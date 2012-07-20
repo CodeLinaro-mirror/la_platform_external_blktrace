@@ -59,13 +59,14 @@ static int init_rsip(struct rstat *rsip, struct d_info *dip)
 
 	rsip->base_sec = -1;
 	rsip->ios = rsip->nblks = 0;
+	rsip->rios = rsip->wios = rsip->rblks = rsip->wblks = 0;
 
 	if (output_name)
 		snprintf(fname, 255, "%s_%s", output_name, nm);
 	else snprintf(fname, 255, "%s", nm);
 
-	if (do_open(&rsip->files[0], fname, "iops_fp") ||
-		do_open(&rsip->files[1], fname, "mbps_fp") ||
+	if (do_open(&rsip->files[0], fname, "iops") ||
+		do_open(&rsip->files[1], fname, "mbps") ||
 		do_open(&rsip->files[2], fname, "r_iops") ||
 		do_open(&rsip->files[3], fname, "r_mbps") ||
 		do_open(&rsip->files[4], fname, "w_iops") ||
@@ -148,7 +149,8 @@ void rstat_add(void *ptr, double cur, unsigned long long nblks, int rw)
 {
 	if (ptr != NULL)
 		__add((struct rstat *)ptr, cur, nblks, rw);
-	__add(sys_info, cur, nblks, rw);
+	if (sys_info != NULL)
+		__add(sys_info, cur, nblks, rw);
 }
 
 int rstat_init(void)

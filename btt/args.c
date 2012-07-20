@@ -287,27 +287,6 @@ static FILE *std_open(char *output_name, char *sfx, char *msg)
 	return fp;
 }
 
-void btt_setup()
-{
-	setup_ifile(input_name);
-
-	if (output_name == NULL) {
-		rngs_ofp = avgs_ofp = msgs_ofp = stdout;
-		easy_parse_avgs = 0;
-	} else {
-		rngs_ofp = std_open(output_name, "dat", "range data");
-		avgs_ofp = std_open(output_name, "avg", "stats data");
-		msgs_ofp = std_open(output_name, "msg", "K messages");
-		if (easy_parse_avgs) {
-			xavgs_ofp = std_open(output_name, "xvg",
-					     "EZ stats data");
-		}
-	}
-
-	iostat_ofp = setup_ofile(iostat_name);
-	per_io_ofp = setup_ofile(per_io_name);
-}
-
 void handle_args(int argc, char *argv[])
 {
 	int c;
@@ -423,5 +402,22 @@ void handle_args(int argc, char *argv[])
 		fprintf(stderr, "FATAL: -m option requires -s options\n");
 		exit(1);
 	}
-	btt_setup();
+
+	setup_ifile(input_name);
+
+	if (output_name == NULL) {
+		rngs_ofp = avgs_ofp = msgs_ofp = stdout;
+		easy_parse_avgs = 0;
+	} else {
+		rngs_ofp = std_open(output_name, "dat", "range data");
+		avgs_ofp = std_open(output_name, "avg", "stats data");
+		msgs_ofp = std_open(output_name, "msg", "K messages");
+		if (easy_parse_avgs) {
+			xavgs_ofp = std_open(output_name, "xvg",
+					     "EZ stats data");
+		}
+	}
+
+	iostat_ofp = setup_ofile(iostat_name);
+	per_io_ofp = setup_ofile(per_io_name);
 }

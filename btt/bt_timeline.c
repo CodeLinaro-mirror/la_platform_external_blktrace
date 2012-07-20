@@ -56,23 +56,48 @@ struct region_info all_regions = {
 };
 
 int process(void);
-extern void btt_setup();
 
-int run_btt()
+#ifdef PROFILER
+int start_btt(char *file)
 {
+	char buf[128];
+
+	output_name = file;
+	snprintf(buf, sizeof(buf) - 1, "%s.bin", file);
+	input_name = buf;
+
+	setup_ifile(input_name);
+
+	init_dev_heads();
+	if (process() || output_summary())
+		return 1;
+
+	dip_cleanup();
+	dev_map_exit();
+	dip_exit();
+	pip_exit();
+	io_free_all();
+	region_exit(&all_regions);
+	p_live_exit();
+	clean_allocs();
+
+	return 0;
+}
+#else
+int main(int argc, char *argv[])
+{
+	handle_args(argc, argv);
+
 	init_dev_heads();
 	iostat_init();
 	if (!rstat_init())
 		return 1;
-
 	if (process() || output_avgs(avgs_ofp) || output_ranges(rngs_ofp))
 		return 1;
-
 	if (iostat_ofp) {
 		fprintf(iostat_ofp, "\n");
 		iostat_dump_stats(iostat_last_stamp, 1);
 	}
-
 	if (msgs_ofp != stdout)
 		fclose(msgs_ofp);
 	if (rngs_ofp != stdout)
@@ -93,24 +118,6 @@ int run_btt()
 	clean_allocs();
 
 	return 0;
-}
-#ifdef PROFILER
-int start_btt(char *file)
-{
-	char buf[128];
-
-	output_name = file;
-	snprintf(buf, sizeof(buf) - 1, "%s.bin", file);
-	input_name = buf;
-
-	btt_setup();
-	return run_btt();
-}
-#else
-int main(int argc, char *argv[])
-{
-	handle_args(argc, argv);
-	return run_btt();
 }
 #endif
 
