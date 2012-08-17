@@ -785,37 +785,30 @@ void output_histos(void)
 #ifdef PROFILER
 void output_stat_hdr(FILE *ofp)
 {
-	fprintf(ofp, "%10s %10s %10s\n",
-	        "IO", "Overall", "Raw");
-	fprintf(ofp, "---------- ---------- ----------\n");
+	fprintf(ofp, "%10s %10s\n",
+	        "IO", "Overall");
+	fprintf(ofp, "---------- ----------\n");
 }
 
-void output_throughput(FILE *ofp, char *hdr, __u64 blks, __u64 time)
+void output_throughput(FILE *ofp, char *hdr, __u64 blks)
 {
 	double overall_mbps = 0.0;
-	double raw_mbps = 0.0;
 
 	if (last_t_seen)
 		overall_mbps = ((((double)blks * 512.0) /
 				(1024.0 * 1024.0)) / last_t_seen);
-	if (BIT_TIME(time))
-		raw_mbps = ((((double)blks * 512.0) /
-				(1024.0 * 1024.0)) / BIT_TIME(time));
 
-	fprintf(ofp, "%-10s %10.2f %10.2f\n", hdr, overall_mbps, raw_mbps);
+	fprintf(ofp, "%-10s %10.2f\n", hdr, overall_mbps);
 }
 
-void output_iops(FILE *ofp, char *hdr, int ios, __u64 time)
+void output_iops(FILE *ofp, char *hdr, int ios)
 {
 	int overall_iops = 0;
-	int raw_iops = 0;
 
 	if (last_t_seen)
 		overall_iops = (int) round((double)ios / last_t_seen);
-	if (BIT_TIME(time))
-		raw_iops = (int) round((double)ios / BIT_TIME(time));
 
-	fprintf(ofp, "%-10s %10d %10d\n", hdr, overall_iops, raw_iops);
+	fprintf(ofp, "%-10s %10d\n", hdr, overall_iops);
 }
 
 int output_summary()
@@ -830,16 +823,16 @@ int output_summary()
 
 	output_section_hdr(ofp, "Throughput in MB/s");
 	output_stat_hdr(ofp);
-	output_throughput(ofp, "Read", all_avgs.blks.rtotal, all_avgs.raw_d2c.rtotal);
-	output_throughput(ofp, "Write", all_avgs.blks.wtotal, all_avgs.raw_d2c.wtotal);
-	output_throughput(ofp, "All", all_avgs.blks.total, all_avgs.raw_d2c.total);
+	output_throughput(ofp, "Read", all_avgs.blks.rtotal);
+	output_throughput(ofp, "Write", all_avgs.blks.wtotal);
+	output_throughput(ofp, "All", all_avgs.blks.total);
 	fprintf(ofp, "\n");
 
 	output_section_hdr(ofp, "IO Operations/s");
 	output_stat_hdr(ofp);
-	output_iops(ofp, "Read", all_avgs.raw_d2c.r_n, all_avgs.raw_d2c.rtotal);
-	output_iops(ofp, "Write", all_avgs.raw_d2c.w_n, all_avgs.raw_d2c.wtotal);
-	output_iops(ofp, "All", all_avgs.raw_d2c.n, all_avgs.raw_d2c.total);
+	output_iops(ofp, "Read", all_avgs.i2d.r_n);
+	output_iops(ofp, "Write", all_avgs.i2d.w_n);
+	output_iops(ofp, "All", all_avgs.i2d.n);
 	fprintf(ofp, "\n");
 
 	output_section_hdr(ofp, "Block Layer Latencies");

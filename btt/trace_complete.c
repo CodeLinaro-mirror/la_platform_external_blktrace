@@ -81,9 +81,6 @@ static void handle_complete(struct io *c_iop)
 		if (q_iop->d_time != (__u64)-1) {
 			__u64 d2c = tdelta(q_iop->d_time, c_iop->t.time);
 
-			if (!c_iop->bytes_left)
-				update_raw_d2c(q_iop, d2c, rw);
-
 			p_live_add(q_iop->dip, q_iop->d_time, c_iop->t.time);
 			update_d2c(q_iop, d2c, rw);
 			latency_d2c(q_iop->dip, c_iop->t.time, d2c, rw);

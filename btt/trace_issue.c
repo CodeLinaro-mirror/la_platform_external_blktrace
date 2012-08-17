@@ -39,11 +39,12 @@ static void handle_issue(struct io *d_iop)
 	dip_foreach_list(d_iop, IOP_Q, &head);
 	list_for_each_safe(p, q, &head) {
 		struct io *q_iop = list_entry(p, struct io, f_head);
+		int rw = IOP_RW(q_iop);
 
 		if (q_iop->i_time != (__u64)-1)
-			update_i2d(q_iop, tdelta(q_iop->i_time, d_iop->t.time));
+			update_i2d(q_iop, tdelta(q_iop->i_time, d_iop->t.time), rw);
 		else if (q_iop->m_time != (__u64)-1)
-			update_m2d(q_iop, tdelta(q_iop->m_time, d_iop->t.time));
+			update_m2d(q_iop, tdelta(q_iop->m_time, d_iop->t.time), rw);
 
 		d_iop->bytes_left -= q_iop->t.bytes;
 		list_del(&q_iop->f_head);
