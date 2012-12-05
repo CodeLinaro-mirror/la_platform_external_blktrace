@@ -24,6 +24,12 @@
 #define t_sec(t)	((t)->bytes >> 9)
 #define t_kb(t)		((t)->bytes >> 10)
 
+#ifdef ANDROID
+#define __bswap_16(b) bswap_16(b)
+#define __bswap_32(b) bswap_32(b)
+#define __bswap_64(b) bswap_64(b)
+#endif
+
 typedef __u32 u32;
 typedef __u8 u8;
 

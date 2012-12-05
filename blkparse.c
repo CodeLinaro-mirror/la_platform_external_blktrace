@@ -1706,7 +1706,7 @@ static int ppi_name_compare(const void *p1, const void *p2)
 	struct per_process_info *ppi2 = *((struct per_process_info **) p2);
 	int res;
 
-	res = strverscmp(ppi1->ppm->comm, ppi2->ppm->comm);
+	res = strcmp(ppi1->ppm->comm, ppi2->ppm->comm);
 	if (!res)
 		res = ppi1->ppm->pid > ppi2->ppm->pid;
 
