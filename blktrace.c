@@ -619,18 +619,6 @@ static void dpp_free(struct devpath *dpp)
 	free(dpp);
 }
 
-static int lock_on_cpu(int cpu)
-{
-	cpu_set_t cpu_mask;
-
-	CPU_ZERO(&cpu_mask);
-	CPU_SET(cpu, &cpu_mask);
-	if (sched_setaffinity(0, sizeof(cpu_mask), &cpu_mask) < 0)
-		return errno;
-
-	return 0;
-}
-
 static int increase_limit(int resource, rlim_t increase)
 {
 	struct rlimit rlim;
@@ -1641,12 +1629,14 @@ static int open_ios(struct tracer *tp)
 		snprintf(iop->ifn, sizeof(iop->ifn), "%s/block/%s/trace%d",
 			debugfs_path, dpp->buts_name, tp->cpu);
 
-		iop->ifd = my_open(iop->ifn, O_RDONLY | O_NONBLOCK);
-		if (iop->ifd < 0) {
-			fprintf(stderr, "Thread %d failed open %s: %d/%s\n",
-				tp->cpu, iop->ifn, errno, strerror(errno));
-			return 1;
-		}
+		/*
+		 * Keep retrying till open succeeds, the cpu buffer will be
+		 * created when the cpu is online.
+		 */
+		do {
+			iop->ifd = my_open(iop->ifn, O_RDONLY | O_NONBLOCK);
+			usleep(5000);
+		} while (iop->ifd < 0 && !tp->is_done);
 
 		init_mmap_info(&iop->mmap_info);
 
@@ -1805,22 +1795,19 @@ static void *thread_main(void *arg)
 	int ret, ndone, to_val;
 	struct tracer *tp = arg;
 
-	ret = lock_on_cpu(tp->cpu);
-	if (ret)
-		goto err;
+	tracer_signal_ready(tp, Th_running, 0);
+	tracer_wait_unblock(tp);
 
 	ret = open_ios(tp);
-	if (ret)
+	if (ret) {
+		fprintf(stderr, "open_ios failed, err:%d/%s\n", errno, strerror(errno));
 		goto err;
+	}
 
 	if (piped_output)
 		to_val = 50;		/* Frequent partial handles */
 	else
 		to_val = 500;		/* 1/2 second intervals */
-
-
-	tracer_signal_ready(tp, Th_running, 0);
-	tracer_wait_unblock(tp);
 
 	while (!tp->is_done) {
 		ndone = poll(tp->pfds, ndevs, to_val);
