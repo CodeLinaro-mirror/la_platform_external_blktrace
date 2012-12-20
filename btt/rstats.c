@@ -28,8 +28,9 @@ struct files {
 
 struct rstat {
 	struct list_head head;
-	struct files files[2];
+	struct files files[6];
 	unsigned long long ios, nblks;
+	unsigned long long rios, wios, rblks, wblks;
 	long long base_sec;
 };
 
@@ -58,7 +59,11 @@ static int init_rsip(struct rstat *rsip, struct d_info *dip)
 	rsip->base_sec = -1;
 	rsip->ios = rsip->nblks = 0;
 	if (do_open(&rsip->files[0], nm, "iops_fp") ||
-			    do_open(&rsip->files[1], nm, "mbps_fp"))
+		do_open(&rsip->files[1], nm, "mbps_fp") ||
+		do_open(&rsip->files[2], nm, "r_iops") ||
+		do_open(&rsip->files[3], nm, "r_mbps") ||
+		do_open(&rsip->files[4], nm, "w_iops") ||
+		do_open(&rsip->files[5], nm, "w_mbps"))
 		return -1;
 
 	list_add_tail(&rsip->head, &rstats);
@@ -80,17 +85,35 @@ static void rstat_emit(struct rstat *rsip, double cur)
 	mbps = ((double)rsip->nblks * 512.0) / (1024.0 * 1024.0);
 	fprintf(rsip->files[1].fp, "%lld %lf\n", rsip->base_sec, mbps);
 
+	/* Read/Write specific IOPS and MBPS */
+	fprintf(rsip->files[2].fp, "%lld %llu\n", rsip->base_sec, rsip->rios);
+	mbps = ((double)rsip->rblks * 512.0) / (1024.0 * 1024.0);
+	fprintf(rsip->files[3].fp, "%lld %lf\n", rsip->base_sec, mbps);
+
+	fprintf(rsip->files[4].fp, "%lld %llu\n", rsip->base_sec, rsip->wios);
+	mbps = ((double)rsip->wblks * 512.0) / (1024.0 * 1024.0);
+	fprintf(rsip->files[5].fp, "%lld %lf\n", rsip->base_sec, mbps);
+
 	rsip->base_sec = (unsigned long long)cur;
 	rsip->ios = rsip->nblks = 0;
+	rsip->rios = rsip->rblks = 0;
+	rsip->wios = rsip->wblks = 0;
 }
 
-static void __add(struct rstat *rsip, double cur, unsigned long long nblks)
+static void __add(struct rstat *rsip, double cur, unsigned long long nblks, int rw)
 {
 	if (rsip->base_sec < 0)
 		rsip->base_sec = (long long)cur;
 	else if (((long long)cur - rsip->base_sec) >= 1)
 		rstat_emit(rsip, cur);
 
+	if (rw) {
+		rsip->rios++;
+		rsip->rblks += nblks;
+	} else {
+		rsip->wios++;
+		rsip->wblks += nblks;
+	}
 	rsip->ios++;
 	rsip->nblks += nblks;
 }
@@ -115,11 +138,11 @@ void rstat_free(void *ptr)
 	free(rsip);
 }
 
-void rstat_add(void *ptr, double cur, unsigned long long nblks)
+void rstat_add(void *ptr, double cur, unsigned long long nblks, int rw)
 {
 	if (ptr != NULL)
-		__add((struct rstat *)ptr, cur, nblks);
-	__add(sys_info, cur, nblks);
+		__add((struct rstat *)ptr, cur, nblks, rw);
+	__add(sys_info, cur, nblks, rw);
 }
 
 int rstat_init(void)
