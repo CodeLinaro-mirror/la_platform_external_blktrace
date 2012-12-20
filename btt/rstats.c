@@ -55,15 +55,21 @@ static int do_open(struct files *fip, char *bn, char *pn)
 static int init_rsip(struct rstat *rsip, struct d_info *dip)
 {
 	char *nm = dip ? dip->dip_name : "sys";
+	char fname[256];
 
 	rsip->base_sec = -1;
 	rsip->ios = rsip->nblks = 0;
-	if (do_open(&rsip->files[0], nm, "iops_fp") ||
-		do_open(&rsip->files[1], nm, "mbps_fp") ||
-		do_open(&rsip->files[2], nm, "r_iops") ||
-		do_open(&rsip->files[3], nm, "r_mbps") ||
-		do_open(&rsip->files[4], nm, "w_iops") ||
-		do_open(&rsip->files[5], nm, "w_mbps"))
+
+	if (output_name)
+		snprintf(fname, 255, "%s_%s", output_name, nm);
+	else snprintf(fname, 255, "%s", nm);
+
+	if (do_open(&rsip->files[0], fname, "iops_fp") ||
+		do_open(&rsip->files[1], fname, "mbps_fp") ||
+		do_open(&rsip->files[2], fname, "r_iops") ||
+		do_open(&rsip->files[3], fname, "r_mbps") ||
+		do_open(&rsip->files[4], fname, "w_iops") ||
+		do_open(&rsip->files[5], fname, "w_mbps"))
 		return -1;
 
 	list_add_tail(&rsip->head, &rstats);
