@@ -281,7 +281,7 @@ static int kill_running_trace;
 static int stop_watch;
 static int piped_output;
 
-static char *debugfs_path = "/sys/kernel/debug";
+char *debugfs_path = "/sys/kernel/debug";
 static char *output_name;
 static char *output_dir;
 
@@ -1444,7 +1444,7 @@ static void clean_trace_bufs(void)
 
 static inline void read_err(int cpu, char *ifn)
 {
-	if (errno != EAGAIN)
+	if ((errno != EAGAIN) && (errno != EBADF))
 		fprintf(stderr, "Thread %d failed read of %s: %d/%s\n",
 			cpu, ifn, errno, strerror(errno));
 }
@@ -1933,7 +1933,7 @@ static void wait_tracers(void)
 	get_all_drops();
 }
 
-static void exit_tracing(void)
+void exit_tracing(void)
 {
 	signal(SIGINT, SIG_IGN);
 	signal(SIGHUP, SIG_IGN);
@@ -2600,7 +2600,9 @@ out:
 
 static int run_tracers(void)
 {
+#ifndef PROFILER
 	atexit(exit_tracing);
+#endif
 	if (net_mode == Net_client)
 		printf("blktrace: connecting to %s\n", hostname);
 
@@ -2637,7 +2639,7 @@ static int run_tracers(void)
 	return 0;
 }
 
-int main(int argc, char *argv[])
+int run_blktrace()
 {
 	int ret = 0;
 
@@ -2647,9 +2649,6 @@ int main(int argc, char *argv[])
 	if (ncpus < 0) {
 		fprintf(stderr, "sysconf(_SC_NPROCESSORS_ONLN) failed %d/%s\n",
 			errno, strerror(errno));
-		ret = 1;
-		goto out;
-	} else if (handle_args(argc, argv)) {
 		ret = 1;
 		goto out;
 	}
@@ -2691,5 +2690,39 @@ out:
 	if (pfp)
 		fclose(pfp);
 	rel_devpaths();
+
 	return ret;
 }
+
+#ifdef PROFILER
+int start_blktrace(char* device, char *ofile)
+{
+	int amask = 0xFBFF;
+
+	if (!device || !ofile) {
+		printf("Invalid input \n");
+		return 1;
+	}
+
+	if (add_devpath(device) != 0)
+		return 1;
+
+	if (!valid_act_opt(amask)) {
+		printf("Invalid set action mask 0x%x\n", amask);
+		return 1;
+	}
+	act_mask = amask;
+
+	output_name = ofile;
+	handle_pfds = handle_pfds_file;
+
+	return run_blktrace();
+}
+#else
+int main(int argc, char *argv[])
+{
+	if (handle_args(argc, argv))
+		return 1;
+	else return run_blktrace();
+}
+#endif
