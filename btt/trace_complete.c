@@ -58,7 +58,7 @@ static void handle_complete(struct io *c_iop)
 	double cur = BIT_TIME(c_iop->t.time);
 	int rw = IOP_RW(c_iop);
 
-	update_blks(c_iop);
+	update_blks(c_iop, rw);
 	update_cregion(&all_regions, c_iop->t.time);
 	update_cregion(&c_iop->dip->regions, c_iop->t.time);
 	if (c_iop->pip)
@@ -74,15 +74,18 @@ static void handle_complete(struct io *c_iop)
 
 		c_iop->bytes_left -= q_iop->t.bytes;
 
-		update_q2c(q_iop, q2c);
+		update_q2c(q_iop, q2c, rw);
 		latency_q2c(q_iop->dip, q_iop->t.time, q2c, rw);
 		update_latency_histo(q_iop->t.bytes, q2c, rw);
 
 		if (q_iop->d_time != (__u64)-1) {
 			__u64 d2c = tdelta(q_iop->d_time, c_iop->t.time);
 
+			if (!c_iop->bytes_left)
+				update_raw_d2c(q_iop, d2c, rw);
+
 			p_live_add(q_iop->dip, q_iop->d_time, c_iop->t.time);
-			update_d2c(q_iop, d2c);
+			update_d2c(q_iop, d2c, rw);
 			latency_d2c(q_iop->dip, c_iop->t.time, d2c, rw);
 			iostat_complete(q_iop, c_iop);
 

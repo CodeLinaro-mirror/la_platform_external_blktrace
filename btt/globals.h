@@ -78,8 +78,9 @@ struct io_list {
 
 struct avg_info {
 	__u64 min, max, total;
+	__u64 rtotal, wtotal;
 	double avg;
-	int n;
+	int n, r_n, w_n;
 };
 
 struct avgs_info {
@@ -99,6 +100,7 @@ struct avgs_info {
 	struct avg_info q2c;
 
 	struct avg_info blks;		/* Blocks transferred */
+	struct avg_info raw_d2c;	/* Unique D2C */
 };
 
 struct range_info {
@@ -272,6 +274,9 @@ int next_trace(struct blk_io_trace *t, void **pdu);
 double pct_done(void);
 
 /* output.c */
+#ifdef PROFILER
+int output_summary();
+#endif
 int output_avgs(FILE *ofp);
 int output_ranges(FILE *ofp);
 

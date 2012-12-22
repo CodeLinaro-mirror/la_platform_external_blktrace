@@ -782,6 +782,94 @@ void output_histos(void)
 	fclose(ofp);
 }
 
+#ifdef PROFILER
+void output_stat_hdr(FILE *ofp)
+{
+	fprintf(ofp, "%10s %10s %10s\n",
+	        "IO", "Overall", "Raw");
+	fprintf(ofp, "---------- ---------- ----------\n");
+}
+
+void output_throughput(FILE *ofp, char *hdr, __u64 blks, __u64 time)
+{
+	double overall_mbps = 0.0;
+	double raw_mbps = 0.0;
+
+	if (last_t_seen)
+		overall_mbps = ((((double)blks * 512.0) /
+				(1024.0 * 1024.0)) / last_t_seen);
+	if (BIT_TIME(time))
+		raw_mbps = ((((double)blks * 512.0) /
+				(1024.0 * 1024.0)) / BIT_TIME(time));
+
+	fprintf(ofp, "%-10s %10.2f %10.2f\n", hdr, overall_mbps, raw_mbps);
+}
+
+void output_iops(FILE *ofp, char *hdr, int ios, __u64 time)
+{
+	int overall_iops = 0;
+	int raw_iops = 0;
+
+	if (last_t_seen)
+		overall_iops = (int) round((double)ios / last_t_seen);
+	if (BIT_TIME(time))
+		raw_iops = (int) round((double)ios / BIT_TIME(time));
+
+	fprintf(ofp, "%-10s %10d %10d\n", hdr, overall_iops, raw_iops);
+}
+
+int output_summary()
+{
+	FILE *ofp = stdout;
+	double mbps = 0.0;
+	int iops = 0;
+
+	fprintf(ofp, "\n******************** ");
+	fprintf(ofp, "Block Profiler Summary");
+	fprintf(ofp, " ********************\n\n");
+
+	output_section_hdr(ofp, "Throughput in MB/s");
+	output_stat_hdr(ofp);
+	output_throughput(ofp, "Read", all_avgs.blks.rtotal, all_avgs.raw_d2c.rtotal);
+	output_throughput(ofp, "Write", all_avgs.blks.wtotal, all_avgs.raw_d2c.wtotal);
+	output_throughput(ofp, "All", all_avgs.blks.total, all_avgs.raw_d2c.total);
+	fprintf(ofp, "\n");
+
+	output_section_hdr(ofp, "IO Operations/s");
+	output_stat_hdr(ofp);
+	output_iops(ofp, "Read", all_avgs.raw_d2c.r_n, all_avgs.raw_d2c.rtotal);
+	output_iops(ofp, "Write", all_avgs.raw_d2c.w_n, all_avgs.raw_d2c.wtotal);
+	output_iops(ofp, "All", all_avgs.raw_d2c.n, all_avgs.raw_d2c.total);
+	fprintf(ofp, "\n");
+
+	output_section_hdr(ofp, "Block Layer Latencies");
+	output_hdr(ofp, "ALL");
+	__output_avg(ofp, "Q2Qdm", &all_avgs.q2q_dm, 0);
+	__output_avg(ofp, "Q2Adm", &all_avgs.q2a_dm, 0);
+	__output_avg(ofp, "Q2Cdm", &all_avgs.q2c_dm, 0);
+	fprintf(ofp, "\n");
+
+	__output_avg(ofp, "Q2Q", &all_avgs.q2q, 1);
+	__output_avg(ofp, "Q2A", &all_avgs.q2a, 1);
+	__output_avg(ofp, "Q2G", &all_avgs.q2g, 1);
+	__output_avg(ofp, "S2G", &all_avgs.s2g, 1);
+	__output_avg(ofp, "G2I", &all_avgs.g2i, 1);
+	__output_avg(ofp, "Q2M", &all_avgs.q2m, 1);
+	__output_avg(ofp, "I2D", &all_avgs.i2d, 1);
+	__output_avg(ofp, "M2D", &all_avgs.m2d, 1);
+	__output_avg(ofp, "D2C", &all_avgs.d2c, 1);
+	__output_avg(ofp, "Q2C", &all_avgs.q2c, 1);
+	fprintf(ofp, "\n");
+
+	output_section_hdr(ofp, "Device Merge Information");
+	output_dip_merge_ratio(ofp);
+
+	output_histos();
+
+	return 0;
+}
+#endif
+
 int output_avgs(FILE *ofp)
 {
 	if (output_all_data) {
@@ -861,7 +949,6 @@ int output_avgs(FILE *ofp)
 	output_p_live(ofp);
 
 	output_histos();
-
 
 	if (output_all_data) {
 		output_section_hdr(ofp, "Q2D Histogram");

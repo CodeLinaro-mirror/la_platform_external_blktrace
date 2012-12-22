@@ -110,7 +110,9 @@ static inline FILE *open_pit(struct d_info *dip)
 	FILE *fp;
 	char str[256];
 
-	sprintf(str, "%s_pit.dat", dip->dip_name);
+	if (output_name)
+		snprintf(str, 255, "%s_%s_pit.dat", output_name, dip->dip_name);
+	else snprintf(str, 255, "%s_pit.dat", dip->dip_name);
 	if ((fp = my_fopen(str, "w")) == NULL)
 		perror(str);
 
