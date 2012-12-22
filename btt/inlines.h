@@ -262,9 +262,9 @@ static inline void unupdate_q2m(struct io *iop, __u64 m_time)
 	UNUPDATE_AVGS(q2m, iop, iop->pip, m_time);
 }
 
-static inline void update_i2d(struct io *iop, __u64 d_time)
+static inline void update_i2d(struct io *iop, __u64 d_time, int rw)
 {
-	UPDATE_AVGS(i2d, iop, iop->pip, d_time, -1);
+	UPDATE_AVGS(i2d, iop, iop->pip, d_time, rw);
 }
 
 static inline void unupdate_i2d(struct io *iop, __u64 d_time)
@@ -272,9 +272,9 @@ static inline void unupdate_i2d(struct io *iop, __u64 d_time)
 	UNUPDATE_AVGS(i2d, iop, iop->pip, d_time);
 }
 
-static inline void update_m2d(struct io *iop, __u64 d_time)
+static inline void update_m2d(struct io *iop, __u64 d_time, int rw)
 {
-	UPDATE_AVGS(m2d, iop, iop->pip, d_time, -1);
+	UPDATE_AVGS(m2d, iop, iop->pip, d_time, rw);
 }
 
 static inline void unupdate_m2d(struct io *iop, __u64 d_time)
@@ -294,11 +294,6 @@ static inline void update_blks(struct io *iop, int rw)
 	avg_update(&iop->dip->avgs.blks, nblks, rw);
 	if (iop->pip)
 		avg_update(&iop->pip->avgs.blks, nblks, rw);
-}
-
-static inline void update_raw_d2c(struct io *iop, __u64 c_time, int rw)
-{
-	UPDATE_AVGS(raw_d2c, iop, iop->pip, c_time, rw);
 }
 
 static inline struct rb_root *__get_root(struct d_info *dip, enum iop_type type)

@@ -100,7 +100,6 @@ struct avgs_info {
 	struct avg_info q2c;
 
 	struct avg_info blks;		/* Blocks transferred */
-	struct avg_info raw_d2c;	/* Unique D2C */
 };
 
 struct range_info {
