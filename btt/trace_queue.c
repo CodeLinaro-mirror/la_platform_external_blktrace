@@ -44,6 +44,7 @@ static void handle_queue(struct io *q_iop)
 	else
 		q_iop->dip->n_wqs++;
 	aqd_queue(q_iop->dip, rw);
+	bno_dump_queue(q_iop->dip->bno_dump_handle, q_iop);
 
 	q_iop->dip->t_act_q += q_iop->dip->n_act_q;
 	q_iop->dip->n_act_q++;

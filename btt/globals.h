@@ -307,7 +307,8 @@ void pip_exit(void);
 /* bno_dump.c */
 void *bno_dump_alloc(struct d_info *dip);
 void bno_dump_free(void *param);
-void bno_dump_add(void *handle, struct io *iop);
+void bno_dump_queue(void *handle, struct io *iop);
+void bno_dump_issue(void *handle, struct io *iop);
 void bno_dump_clean(void);
 
 /* plat.c */
