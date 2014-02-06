@@ -81,6 +81,8 @@ struct avg_info {
 	__u64 rtotal, wtotal;
 	double avg;
 	int n, r_n, w_n;
+	double variance;
+	long double m2;		/* latency second moment */
 };
 
 struct avgs_info {
