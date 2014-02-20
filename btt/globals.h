@@ -49,6 +49,7 @@
 
 #define TO_SEC(nanosec)	((double)(nanosec) / 1.0e9)
 #define TO_MSEC(nanosec) (1000.0 * TO_SEC(nanosec))
+#define MSEC_IN_SEC	1000
 
 enum iop_type {
 	IOP_Q = 0,
@@ -201,6 +202,7 @@ extern time_t genesis, last_vtrace;
 extern double t_astart, t_aend;
 extern __u64 q_histo[N_HIST_BKTS], d_histo[N_HIST_BKTS];
 extern __u32 r_latency_histo[N_READ_HIST_BINS], w_latency_histo[N_WRITE_HIST_BINS];
+extern unsigned int calc_freq;
 
 /* args.c */
 void handle_args(int argc, char *argv[]);

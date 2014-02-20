@@ -64,7 +64,7 @@ static void handle_complete(struct io *c_iop)
 	if (c_iop->pip)
 		update_cregion(&c_iop->pip->regions, c_iop->t.time);
 	aqd_complete(c_iop->dip->aqd_handle, cur);
-	rstat_add(c_iop->dip->rstat_handle, cur, c_iop->t.bytes >> 9, rw);
+	rstat_add(c_iop->dip->rstat_handle, c_iop->t.time, c_iop->t.bytes >> 9, rw);
 
 	dip_foreach_list(c_iop, IOP_Q, &head);
 	list_for_each_safe(p, q, &head) {
