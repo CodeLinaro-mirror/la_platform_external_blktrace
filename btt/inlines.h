@@ -81,8 +81,9 @@ static inline void update_cregion(struct region_info *reg, __u64 time)
 
 static inline void avg_update(struct avg_info *ap, __u64 t, int rw)
 {
-        if (ap->n++ == 0) {
-                ap->min = ap->total = ap->max = t;
+	if (ap->n++ == 0) {
+		ap->min = ap->total = ap->max = t;
+		ap->m2 = BIT_TIME(ap->total) * BIT_TIME(ap->total);
 		if (rw == 1) {
 			ap->rtotal = t;
 			ap->r_n++;
@@ -91,11 +92,12 @@ static inline void avg_update(struct avg_info *ap, __u64 t, int rw)
 			ap->w_n++;
 		}
 	} else {
-                if (t < ap->min)
-                        ap->min = t;
-                else if (t > ap->max)
-                        ap->max = t;
-                ap->total += t;
+		if (t < ap->min)
+			ap->min = t;
+		else if (t > ap->max)
+			ap->max = t;
+		ap->total += t;
+		ap->m2 += BIT_TIME(t) * BIT_TIME(t);
 		if (rw == 1) {
 			ap->r_n++;
 			ap->rtotal += t;
@@ -103,21 +105,23 @@ static inline void avg_update(struct avg_info *ap, __u64 t, int rw)
 			ap->w_n++;
 			ap->wtotal += t;
 		}
-        }
+	}
 }
 
 static inline void avg_update_n(struct avg_info *ap, __u64 t, int n)
 {
-        if (ap->n == 0) {
-                ap->min = ap->max = t;
+	if (ap->n == 0) {
+		ap->min = ap->max = t;
 		ap->total = (n * t);
+		ap->m2 = n * (BIT_TIME(t) * BIT_TIME(t));
 	} else {
-                if (t < ap->min)
-                        ap->min = t;
-                else if (t > ap->max)
-                        ap->max = t;
-                ap->total += (n * t);
-        }
+		if (t < ap->min)
+			ap->min = t;
+		else if (t > ap->max)
+			ap->max = t;
+		ap->total += (n * t);
+		ap->m2 += (n * (BIT_TIME(t) * BIT_TIME(t)));
+	}
 
 	ap->n += n;
 }
