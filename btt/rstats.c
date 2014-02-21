@@ -21,6 +21,8 @@
  */
 #include "globals.h"
 
+unsigned int calc_freq;
+
 struct files {
 	FILE *fp;
 	char *nm;
@@ -31,7 +33,7 @@ struct rstat {
 	struct files files[6];
 	unsigned long long ios, nblks;
 	unsigned long long rios, wios, rblks, wblks;
-	long long base_sec;
+	double base_msec;
 };
 
 static struct rstat *sys_info;
@@ -57,7 +59,10 @@ static int init_rsip(struct rstat *rsip, struct d_info *dip)
 	char *nm = dip ? dip->dip_name : "sys";
 	char fname[256];
 
-	rsip->base_sec = -1;
+	if (calc_freq <= 0 || calc_freq > 1000)
+		calc_freq = 1000;
+
+	rsip->base_msec = -1;
 	rsip->ios = rsip->nblks = 0;
 	rsip->rios = rsip->wios = rsip->rblks = rsip->wblks = 0;
 
@@ -79,29 +84,35 @@ static int init_rsip(struct rstat *rsip, struct d_info *dip)
 
 static void rstat_emit(struct rstat *rsip, double cur)
 {
-	double mbps;
+	double mbps, base_sec;
+	double resolution = MSEC_IN_SEC / (double)calc_freq;
+
+	/* round base down to closest multiple of frequency */
+	base_sec = (unsigned int)(rsip->base_msec -
+		    ((unsigned int)rsip->base_msec % calc_freq)) / 1000.0;
 
 	/*
-	 * I/Os per second is easy: just the ios
+	 * I/Os per second is easy: just the ios, normalized
 	 */
-	fprintf(rsip->files[0].fp, "%lld %llu\n", rsip->base_sec, rsip->ios);
+	fprintf(rsip->files[0].fp, "%.3lf %llu\n", base_sec,
+		(unsigned long long)(rsip->ios * resolution));
 
 	/*
 	 * MB/s we convert blocks to mb...
 	 */
-	mbps = ((double)rsip->nblks * 512.0) / (1024.0 * 1024.0);
-	fprintf(rsip->files[1].fp, "%lld %lf\n", rsip->base_sec, mbps);
+	mbps = ((double)rsip->nblks * 512.0 * resolution) / (1024.0 * 1024.0);
+	fprintf(rsip->files[1].fp, "%.3lf %.2lf\n", base_sec, mbps);
 
 	/* Read/Write specific IOPS and MBPS */
-	fprintf(rsip->files[2].fp, "%lld %llu\n", rsip->base_sec, rsip->rios);
-	mbps = ((double)rsip->rblks * 512.0) / (1024.0 * 1024.0);
-	fprintf(rsip->files[3].fp, "%lld %lf\n", rsip->base_sec, mbps);
+	fprintf(rsip->files[2].fp, "%.3lf %llu\n", base_sec, rsip->rios);
+	mbps = ((double)rsip->rblks * 512.0 * resolution) / (1024.0 * 1024.0);
+	fprintf(rsip->files[3].fp, "%.3lf %.2lf\n", base_sec, mbps);
 
-	fprintf(rsip->files[4].fp, "%lld %llu\n", rsip->base_sec, rsip->wios);
-	mbps = ((double)rsip->wblks * 512.0) / (1024.0 * 1024.0);
-	fprintf(rsip->files[5].fp, "%lld %lf\n", rsip->base_sec, mbps);
+	fprintf(rsip->files[4].fp, "%.3lf %llu\n", base_sec, rsip->wios);
+	mbps = ((double)rsip->wblks * 512.0 * resolution) / (1024.0 * 1024.0);
+	fprintf(rsip->files[5].fp, "%.3lf %.2lf\n", base_sec, mbps);
 
-	rsip->base_sec = (unsigned long long)cur;
+	rsip->base_msec = TO_MSEC(cur);
 	rsip->ios = rsip->nblks = 0;
 	rsip->rios = rsip->rblks = 0;
 	rsip->wios = rsip->wblks = 0;
@@ -109,9 +120,9 @@ static void rstat_emit(struct rstat *rsip, double cur)
 
 static void __add(struct rstat *rsip, double cur, unsigned long long nblks, int rw)
 {
-	if (rsip->base_sec < 0)
-		rsip->base_sec = (long long)cur;
-	else if (((long long)cur - rsip->base_sec) >= 1)
+	if (rsip->base_msec < 0)
+		rsip->base_msec = TO_MSEC(cur);
+	else if ((TO_MSEC(cur) - rsip->base_msec) >= (double)calc_freq)
 		rstat_emit(rsip, cur);
 
 	if (rw) {

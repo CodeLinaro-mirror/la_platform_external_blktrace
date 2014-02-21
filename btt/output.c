@@ -62,23 +62,26 @@ void output_section_hdr(FILE *ofp, char *hdr)
 
 void output_hdr(FILE *ofp, char *hdr)
 {
-	fprintf(ofp, "%15s %13s %13s %13s %11s\n",
-	        hdr, "MIN", "AVG", "MAX", "N" );
-	fprintf(ofp, "--------------- ------------- ------------- ------------- -----------\n");
+	fprintf(ofp, "%15s %13s %13s %13s %11s %13s\n",
+	        hdr, "MIN", "AVG", "MAX", "N", "VAR" );
+	fprintf(ofp, "--------------- ------------- ------------- ------------- ----------- ------------------\n");
 }
 
 void __output_avg(FILE *ofp, char *hdr, struct avg_info *ap, int do_easy)
 {
 	if (ap->n > 0) {
 		ap->avg = BIT_TIME(ap->total) / (double)ap->n;
-		fprintf(ofp, "%-15s %13.9f %13.9f %13.9f %11d\n", hdr,
-			BIT_TIME(ap->min), ap->avg, BIT_TIME(ap->max), ap->n);
+		ap->variance = ap->m2 / (double)ap->n;
+		ap->variance -= (ap->avg * ap->avg);
+		fprintf(ofp, "%-15s %13.9f %13.9f %13.9f %11d \t%13.9f\n", hdr,
+			BIT_TIME(ap->min), ap->avg, BIT_TIME(ap->max), ap->n,
+			ap->variance);
 
 		if (do_easy && easy_parse_avgs) {
 			fprintf(xavgs_ofp,
-				"%s %.9lf %.9lf %.9lf %d\n",
+				"%s %.9lf %.9lf %.9lf %d \t%.9f\n",
 				hdr, BIT_TIME(ap->min), ap->avg,
-						BIT_TIME(ap->max), ap->n);
+				BIT_TIME(ap->max), ap->n, ap->variance);
 		}
 	}
 }

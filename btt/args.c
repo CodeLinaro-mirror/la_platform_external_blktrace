@@ -29,7 +29,7 @@
 
 #define SETBUFFER_SIZE	(64 * 1024)
 
-#define S_OPTS	"aAB:d:D:e:hi:I:l:L:m:M:o:p:P:q:Q:rs:S:t:T:u:VvXz:Z"
+#define S_OPTS	"aAB:d:D:e:f:hi:I:l:L:m:M:o:p:P:q:Q:rs:S:t:T:u:VvXz:Z"
 static struct option l_opts[] = {
 	{
 		.name = "seek-absolute",
@@ -66,6 +66,12 @@ static struct option l_opts[] = {
 		.has_arg = required_argument,
 		.flag = NULL,
 		.val = 'e'
+	},
+	{
+		.name = "frequency",
+		.has_arg = required_argument,
+		.flag = NULL,
+		.val = 'f'
 	},
 	{
 		.name = "help",
@@ -217,6 +223,7 @@ static char usage_str[] = \
 	"[ -d <seconds>     | --range-delta=<seconds> ]\n" \
 	"[ -D <dev;...>     | --devices=<dev;...> ]\n" \
 	"[ -e <exe,...>     | --exes=<exe,...>  ]\n" \
+	"[ -f <freq>        | --frequency=<frequency>  ]\n" \
 	"[ -h               | --help ]\n" \
 	"[ -i <input name>  | --input-file=<input name> ]\n" \
 	"[ -I <output name> | --iostat=<output name> ]\n" \
@@ -310,6 +317,9 @@ void handle_args(int argc, char *argv[])
 			break;
 		case 'e':
 			exes = optarg;
+			break;
+		case 'f':
+			sscanf(optarg, "%u", &calc_freq);
 			break;
 		case 'h':
 			usage(argv[0]);
