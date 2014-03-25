@@ -104,11 +104,13 @@ static void rstat_emit(struct rstat *rsip, double cur)
 	fprintf(rsip->files[1].fp, "%.3lf %.2lf\n", base_sec, mbps);
 
 	/* Read/Write specific IOPS and MBPS */
-	fprintf(rsip->files[2].fp, "%.3lf %llu\n", base_sec, rsip->rios);
+	fprintf(rsip->files[2].fp, "%.3lf %llu\n", base_sec,
+		rsip->rios * (unsigned long long)resolution);
 	mbps = ((double)rsip->rblks * 512.0 * resolution) / (1024.0 * 1024.0);
 	fprintf(rsip->files[3].fp, "%.3lf %.2lf\n", base_sec, mbps);
 
-	fprintf(rsip->files[4].fp, "%.3lf %llu\n", base_sec, rsip->wios);
+	fprintf(rsip->files[4].fp, "%.3lf %llu\n", base_sec,
+		rsip->wios * (unsigned long long)resolution);
 	mbps = ((double)rsip->wblks * 512.0 * resolution) / (1024.0 * 1024.0);
 	fprintf(rsip->files[5].fp, "%.3lf %.2lf\n", base_sec, mbps);
 
