@@ -36,6 +36,9 @@
  * 1024 == > 1024 blks
  */
 #define N_HIST_BKTS	1025
+#define N_LAT_HIST_BKTS		10002
+#define BKT_RESOLOTION_US	100
+#define N_DIRECTIONS	3
 
 #define N_READ_HIST_BINS	60001
 #define N_WRITE_HIST_BINS	60001
@@ -64,6 +67,13 @@ enum iop_type {
 	IOP_S = 9
 };
 #define N_IOP_TYPES	(IOP_S + 1)
+
+enum latency_type {
+	Q2D_LATENCY,
+	Q2C_LATENCY,
+	D2C_LATENCY,
+	NUM_LAT_TYPES,
+};
 
 struct mode {
 	int most_seeks, nmds;
@@ -184,10 +194,11 @@ struct p_live_info {
 extern char bt_timeline_version[], *devices, *exes, *input_name, *output_name;
 extern char *seek_name, *iostat_name, *d2c_name, *q2c_name, *per_io_name;
 extern char *bno_dump_name, *unplug_hist_name, *sps_name, *aqd_name, *q2d_name;
-extern char *per_io_trees;
+extern char *per_io_trees, *lat_hist_name;
 extern double range_delta, plat_freq, last_t_seen;
 extern FILE *rngs_ofp, *avgs_ofp, *xavgs_ofp, *iostat_ofp, *per_io_ofp;
 extern FILE *msgs_ofp;
+extern FILE *lat_hist_ofs[NUM_LAT_TYPES][N_DIRECTIONS], *cum_lat_ofs[NUM_LAT_TYPES][N_DIRECTIONS];
 extern int verbose, done, time_bounded, output_all_data, seek_absolute;
 extern int easy_parse_avgs, ignore_remaps, do_p_live;
 extern unsigned int n_devs;
@@ -202,6 +213,8 @@ extern time_t genesis, last_vtrace;
 extern double t_astart, t_aend;
 extern __u64 q_histo[N_HIST_BKTS], d_histo[N_HIST_BKTS];
 extern __u32 r_latency_histo[N_READ_HIST_BINS], w_latency_histo[N_WRITE_HIST_BINS];
+extern __u64 lat_histos[NUM_LAT_TYPES][N_DIRECTIONS][N_LAT_HIST_BKTS];
+extern double cumulative_lat[NUM_LAT_TYPES][N_DIRECTIONS][N_LAT_HIST_BKTS];
 extern unsigned int calc_freq;
 
 /* args.c */
@@ -259,6 +272,7 @@ void latency_clean(void);
 void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
 void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
 void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
+void output_latency_hists(void);
 
 /* misc.c */
 void add_file(FILE *fp, char *oname);

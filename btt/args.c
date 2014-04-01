@@ -29,7 +29,7 @@
 
 #define SETBUFFER_SIZE	(64 * 1024)
 
-#define S_OPTS	"aAB:d:D:e:f:hi:I:l:L:m:M:o:p:P:q:Q:rs:S:t:T:u:VvXz:Z"
+#define S_OPTS	"aAB:d:D:e:f:hi:H:I:l:L:m:M:o:p:P:q:Q:rs:S:t:T:u:VvXz:Z"
 static struct option l_opts[] = {
 	{
 		.name = "seek-absolute",
@@ -78,6 +78,12 @@ static struct option l_opts[] = {
 		.has_arg = no_argument,
 		.flag = NULL,
 		.val = 'h'
+	},
+	{
+		.name = "Histogram",
+		.has_arg = required_argument,
+		.flag = NULL,
+		.val = 'H'
 	},
 	{
 		.name = "input-file",
@@ -225,6 +231,7 @@ static char usage_str[] = \
 	"[ -e <exe,...>     | --exes=<exe,...>  ]\n" \
 	"[ -f <freq>        | --frequency=<frequency>  ]\n" \
 	"[ -h               | --help ]\n" \
+	"[ -H <output name> | --Histogram ]\n" \
 	"[ -i <input name>  | --input-file=<input name> ]\n" \
 	"[ -I <output name> | --iostat=<output name> ]\n" \
 	"[ -l <output name> | --d2c-latencies=<output name> ]\n" \
@@ -324,6 +331,9 @@ void handle_args(int argc, char *argv[])
 		case 'h':
 			usage(argv[0]);
 			exit(0);
+		case 'H':
+			lat_hist_name = optarg;
+			break;
 		case 'i':
 			input_name = optarg;
 			break;
