@@ -28,9 +28,11 @@
 char bt_timeline_version[] = "2.09";
 
 char *devices, *exes, *input_name, *output_name, *seek_name, *bno_dump_name;
-char *d2c_name, *q2c_name, *per_io_name, *unplug_hist_name;
+char *d2c_name, *q2c_name, *per_io_name, *unplug_hist_name, *lat_hist_name = NULL;
 char *sps_name, *aqd_name, *q2d_name, *per_io_trees;
 FILE *rngs_ofp, *avgs_ofp, *xavgs_ofp, *per_io_ofp, *msgs_ofp;
+FILE *lat_hist_ofs[NUM_LAT_TYPES][N_DIRECTIONS], *cum_lat_ofs[NUM_LAT_TYPES][N_DIRECTIONS];
+
 int verbose, done, time_bounded, output_all_data, seek_absolute;
 int easy_parse_avgs, ignore_remaps, do_p_live;
 double t_astart, t_aend, last_t_seen;
@@ -45,6 +47,8 @@ LIST_HEAD(free_ios);
 LIST_HEAD(free_bilinks);
 __u64 q_histo[N_HIST_BKTS], d_histo[N_HIST_BKTS];
 __u32 r_latency_histo[N_READ_HIST_BINS], w_latency_histo[N_WRITE_HIST_BINS];
+__u64 lat_histos[NUM_LAT_TYPES][3][N_LAT_HIST_BKTS];
+double cumulative_lat[NUM_LAT_TYPES][3][N_LAT_HIST_BKTS];
 
 double plat_freq = 0.0;
 double range_delta = 0.1;
@@ -98,6 +102,10 @@ int main(int argc, char *argv[])
 		fprintf(iostat_ofp, "\n");
 		iostat_dump_stats(iostat_last_stamp, 1);
 	}
+
+	if (lat_hist_name)
+		output_latency_hists();
+
 	if (msgs_ofp != stdout)
 		fclose(msgs_ofp);
 	if (rngs_ofp != stdout)
