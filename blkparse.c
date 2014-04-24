@@ -2475,7 +2475,7 @@ static int handle(struct ms_stream *msp)
 	pdi = msp->pdi;
 	pci = get_cpu_info(pdi, msp->cpu);
 	pci->nelems++;
-	bit->time -= genesis_time;
+	bit->time -= start_timestamp;
 
 	if (t->bit->time > stopwatch_end)
 		return 0;
