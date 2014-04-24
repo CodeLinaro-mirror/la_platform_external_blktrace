@@ -21,16 +21,19 @@
 #include "globals.h"
 
 struct bno_dump {
-	FILE *rfp, *wfp, *cfp;
+	FILE *qrfp, *qwfp, *qcfp;
+	FILE *drfp, *dwfp, *dcfp;
 };
 
-static FILE *bno_dump_open(struct d_info *dip, char rwc)
+static FILE *bno_dump_open(struct d_info *dip, char *rwc)
 {
 	FILE *fp;
 	char *oname;
+	int onamesz;
 
-	oname = malloc(strlen(bno_dump_name) + strlen(dip->dip_name) + 32);
-	sprintf(oname, "%s_%s_%c.dat", bno_dump_name, dip->dip_name, rwc);
+	onamesz = strlen(bno_dump_name) + strlen(dip->dip_name) + 32;
+	oname = malloc(onamesz);
+	snprintf(oname, onamesz, "%s_%s_%s.dat", bno_dump_name, dip->dip_name, rwc);
 	if ((fp = my_fopen(oname, "w")) == NULL) {
 		perror(oname);
 		free(oname);
@@ -41,8 +44,9 @@ static FILE *bno_dump_open(struct d_info *dip, char rwc)
 
 static inline void bno_dump_write(FILE *fp, struct io *iop)
 {
-	fprintf(fp, "%15.9lf %lld %lld\n", BIT_TIME(iop->t.time),
-		(long long)BIT_START(iop), (long long)BIT_END(iop));
+	fprintf(fp, "%15.9lf %15lld %15lld %15u %20s\n", BIT_TIME(iop->t.time),
+		(long long)BIT_START(iop), (long long)BIT_END(iop),
+		iop->t.bytes, iop->pip->name);
 }
 
 void *bno_dump_alloc(struct d_info *dip)
@@ -52,9 +56,12 @@ void *bno_dump_alloc(struct d_info *dip)
 	if (bno_dump_name == NULL) return NULL;
 
 	bdp = malloc(sizeof(*bdp));
-	bdp->rfp = bno_dump_open(dip, 'r');
-	bdp->wfp = bno_dump_open(dip, 'w');
-	bdp->cfp = bno_dump_open(dip, 'c');
+	bdp->qrfp = bno_dump_open(dip, "q_r");
+	bdp->qwfp = bno_dump_open(dip, "q_w");
+	bdp->qcfp = bno_dump_open(dip, "q_c");
+	bdp->drfp = bno_dump_open(dip, "d_r");
+	bdp->dwfp = bno_dump_open(dip, "d_w");
+	bdp->dcfp = bno_dump_open(dip, "d_c");
 
 	return bdp;
 }
@@ -64,16 +71,30 @@ void bno_dump_free(void *param)
 	free(param);
 }
 
-void bno_dump_add(void *handle, struct io *iop)
+void bno_dump_queue(void *handle, struct io *iop)
 {
 	struct bno_dump *bdp = handle;
 
 	if (bdp) {
-		FILE *fp = IOP_READ(iop) ? bdp->rfp : bdp->wfp;
+		FILE *fp = IOP_READ(iop) ? bdp->qrfp : bdp->qwfp;
 
 		if (fp)
 			bno_dump_write(fp, iop);
-		if (bdp->cfp)
-			bno_dump_write(bdp->cfp, iop);
+		if (bdp->qcfp)
+			bno_dump_write(bdp->qcfp, iop);
+	}
+}
+
+void bno_dump_issue(void *handle, struct io *iop)
+{
+	struct bno_dump *bdp = handle;
+
+	if (bdp) {
+		FILE *fp = IOP_READ(iop) ? bdp->drfp : bdp->dwfp;
+
+		if (fp)
+			bno_dump_write(fp, iop);
+		if (bdp->dcfp)
+			bno_dump_write(bdp->dcfp, iop);
 	}
 }
