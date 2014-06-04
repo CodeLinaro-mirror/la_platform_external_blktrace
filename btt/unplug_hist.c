@@ -26,18 +26,18 @@
 #define NBKTS		(EXCESS_BKT + 1)
 
 struct hist_bkt {
-	struct d_info *dip;
+	__u32 dev;
 	int hist[NBKTS * sizeof(int)];
 };
 
-void *unplug_hist_alloc(struct d_info *dip)
+void *unplug_hist_alloc(__u32 device)
 {
 	struct hist_bkt *hbp;
 
 	if (unplug_hist_name == NULL) return NULL;
 
 	hbp = malloc(sizeof(*hbp));
-	hbp->dip = dip;
+	hbp->dev = device;
 	memset(hbp->hist, 0, NBKTS * sizeof(int));
 
 	return hbp;
@@ -66,12 +66,11 @@ void unplug_hist_free(void *arg)
 	if (arg) {
 		FILE *fp;
 		struct hist_bkt *hbp = arg;
-		size_t tlen = strlen(unplug_hist_name)
-					+ strlen(hbp->dip->dip_name) + 32;
-		char *oname = malloc(tlen);
+		int mjr = hbp->dev >> MINORBITS;
+		int mnr = hbp->dev & ((1 << MINORBITS) - 1);
+		char *oname = malloc(strlen(unplug_hist_name) + 32);
 
-		sprintf(oname, "%s_%s.dat", unplug_hist_name,
-							hbp->dip->dip_name);
+		sprintf(oname, "%s_%03d,%03d.dat", unplug_hist_name, mjr, mnr);
 		if ((fp = my_fopen(oname, "w")) != NULL) {
 			int i;
 

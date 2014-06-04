@@ -29,7 +29,7 @@
 
 #define SETBUFFER_SIZE	(64 * 1024)
 
-#define S_OPTS	"aAB:d:D:e:f:hi:I:l:L:m:M:o:p:P:q:Q:rs:S:t:T:u:VvXz:Z"
+#define S_OPTS	"aAB:d:D:e:hi:I:l:L:m:M:o:p:P:q:Q:rs:S:t:T:u:VvXz:"
 static struct option l_opts[] = {
 	{
 		.name = "seek-absolute",
@@ -66,12 +66,6 @@ static struct option l_opts[] = {
 		.has_arg = required_argument,
 		.flag = NULL,
 		.val = 'e'
-	},
-	{
-		.name = "frequency",
-		.has_arg = required_argument,
-		.flag = NULL,
-		.val = 'f'
 	},
 	{
 		.name = "help",
@@ -194,12 +188,6 @@ static struct option l_opts[] = {
 		.val = 'v'
 	},
 	{
-		.name = "do-active",
-		.has_arg = no_argument,
-		.flag = NULL,
-		.val = 'z'
-	},
-	{
 		.name = "easy-parse-avgs",
 		.has_arg = no_argument,
 		.flag = NULL,
@@ -223,7 +211,6 @@ static char usage_str[] = \
 	"[ -d <seconds>     | --range-delta=<seconds> ]\n" \
 	"[ -D <dev;...>     | --devices=<dev;...> ]\n" \
 	"[ -e <exe,...>     | --exes=<exe,...>  ]\n" \
-	"[ -f <freq>        | --frequency=<frequency>  ]\n" \
 	"[ -h               | --help ]\n" \
 	"[ -i <input name>  | --input-file=<input name> ]\n" \
 	"[ -I <output name> | --iostat=<output name> ]\n" \
@@ -246,12 +233,12 @@ static char usage_str[] = \
 	"[ -v               | --verbose ]\n" \
 	"[ -X               | --easy-parse-avgs ]\n" \
 	"[ -z <output name> | --q2d-latencies=<output name> ]\n" \
-	"[ -Z               | --do-active\n" \
 	"\n";
 
 static void usage(char *prog)
 {
-	fprintf(stderr, "Usage: %s %s", prog, usage_str);
+	fprintf(stderr, "Usage: %s %s %s", prog, bt_timeline_version,
+		usage_str);
 }
 
 static FILE *setup_ofile(char *fname)
@@ -317,9 +304,6 @@ void handle_args(int argc, char *argv[])
 			break;
 		case 'e':
 			exes = optarg;
-			break;
-		case 'f':
-			sscanf(optarg, "%u", &calc_freq);
 			break;
 		case 'h':
 			usage(argv[0]);
@@ -393,9 +377,6 @@ void handle_args(int argc, char *argv[])
 			break;
 		case 'z':
 			q2d_name = optarg;
-			break;
-		case 'Z':
-			do_p_live = 1;
 			break;
 		default:
 			usage(argv[0]);

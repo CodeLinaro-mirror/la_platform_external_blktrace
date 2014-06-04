@@ -21,8 +21,6 @@
 #include <stdio.h>
 #include "globals.h"
 
-static int base_y;
-
 typedef struct avg_info *ai_dip_t;
 ai_dip_t dip_q2q_dm_avg(struct d_info *dip) { return &dip->avgs.q2q_dm; }
 ai_dip_t dip_q2a_dm_avg(struct d_info *dip) { return &dip->avgs.q2a_dm; }
@@ -62,26 +60,23 @@ void output_section_hdr(FILE *ofp, char *hdr)
 
 void output_hdr(FILE *ofp, char *hdr)
 {
-	fprintf(ofp, "%15s %13s %13s %13s %11s %13s\n",
-	        hdr, "MIN", "AVG", "MAX", "N", "VAR" );
-	fprintf(ofp, "--------------- ------------- ------------- ------------- ----------- ------------------\n");
+	fprintf(ofp, "%15s %13s %13s %13s %11s\n",
+	        hdr, "MIN", "AVG", "MAX", "N" );
+	fprintf(ofp, "--------------- ------------- ------------- ------------- -----------\n");
 }
 
 void __output_avg(FILE *ofp, char *hdr, struct avg_info *ap, int do_easy)
 {
 	if (ap->n > 0) {
 		ap->avg = BIT_TIME(ap->total) / (double)ap->n;
-		ap->variance = ap->m2 / (double)ap->n;
-		ap->variance -= (ap->avg * ap->avg);
-		fprintf(ofp, "%-15s %13.9f %13.9f %13.9f %11d \t%13.9f\n", hdr,
-			BIT_TIME(ap->min), ap->avg, BIT_TIME(ap->max), ap->n,
-			ap->variance);
+		fprintf(ofp, "%-15s %13.9f %13.9f %13.9f %11d\n", hdr,
+			BIT_TIME(ap->min), ap->avg, BIT_TIME(ap->max), ap->n);
 
 		if (do_easy && easy_parse_avgs) {
 			fprintf(xavgs_ofp,
-				"%s %.9lf %.9lf %.9lf %d \t%.9f\n",
+				"%s %.9lf %.9lf %.9lf %d\n",
 				hdr, BIT_TIME(ap->min), ap->avg,
-				BIT_TIME(ap->max), ap->n, ap->variance);
+						BIT_TIME(ap->max), ap->n);
 		}
 	}
 }
@@ -677,46 +672,6 @@ void output_actQ_info(FILE *ofp)
 	fprintf(ofp, "\n");
 }
 
-void __dip_output_p_live(struct d_info *dip, void *arg)
-{
-	char dev_info[15];
-	FILE *ofp = arg;
-	char *ttl = dip ? make_dev_hdr(dev_info, 15, dip, 1) : "Total Sys";
-	struct p_live_info *plip = p_live_get(dip, base_y);
-
-	fprintf(ofp, "%10s | %10lu %13.9lf %13.9lf %6.2lf\n", ttl,
-		plip->nlives, plip->avg_live, plip->avg_lull, plip->p_live);
-	if (plip->nlives)
-		base_y += 1;
-}
-
-void output_p_live(FILE *ofp)
-{
-	fprintf(ofp, "%10s | %10s %13s %13s %6s\n", "DEV",
-		"# Live", "Avg. Act", "Avg. !Act", "% Live");
-	fprintf(ofp, "---------- | ---------- "
-		     "------------- ------------- ------\n");
-	base_y = 1;
-	dip_foreach_out(__dip_output_p_live, ofp);
-	fprintf(ofp, "---------- | ---------- "
-		     "------------- ------------- ------\n");
-	base_y = 0;
-	__dip_output_p_live(NULL, ofp);
-	fprintf(ofp, "\n");
-}
-
-struct tQs_info {
-	__u64 t_rqs;
-	__u64 t_wqs;
-} tQs_info;
-
-void __dip_output_tQs(struct d_info *dip, void *arg)
-{
-	(void)arg;
-	tQs_info.t_rqs += dip->n_rqs;
-	tQs_info.t_wqs += dip->n_wqs;
-}
-
 void output_histos(void)
 {
 	int i;
@@ -752,119 +707,7 @@ void output_histos(void)
 	fprintf(ofp, "\n# D bucket for > %d\n%4d %lld\n", (int)N_HIST_BKTS-1,
 		N_HIST_BKTS-1, (long long)d_histo[N_HIST_BKTS-1]);
 	fclose(ofp);
-
-	/* Read/Write latency histogram */
-	dip_foreach_out(__dip_output_tQs, ofp);
-
-	snprintf(fname, 255, "%s_r_latency_hist.dat", output_name);
-	ofp = my_fopen(fname, "w");
-	if (!ofp) {
-		perror(fname);
-		return;
-	}
-	for (i = 0; i < N_READ_HIST_BINS; i++) {
-		if (r_latency_histo[i])
-			fprintf(ofp, "%d\t%f\n", i,
-				((double)r_latency_histo[i] /
-				(double)tQs_info.t_rqs) * 100);
-	}
-	fclose(ofp);
-
-	snprintf(fname, 255, "%s_w_latency_hist.dat", output_name);
-	ofp = my_fopen(fname, "w");
-	if (!ofp) {
-		perror(fname);
-		return;
-	}
-	for (i = 0; i < N_WRITE_HIST_BINS; i++) {
-		if (w_latency_histo[i])
-			fprintf(ofp, "%d\t%f\n", i,
-				((double)w_latency_histo[i] /
-				(double)tQs_info.t_wqs) * 100);
-	}
-	fclose(ofp);
 }
-
-#ifdef PROFILER
-void output_stat_hdr(FILE *ofp)
-{
-	fprintf(ofp, "%10s %10s\n",
-	        "IO", "Overall");
-	fprintf(ofp, "---------- ----------\n");
-}
-
-void output_throughput(FILE *ofp, char *hdr, __u64 blks)
-{
-	double overall_mbps = 0.0;
-
-	if (last_t_seen)
-		overall_mbps = ((((double)blks * 512.0) /
-				(1024.0 * 1024.0)) / last_t_seen);
-
-	fprintf(ofp, "%-10s %10.2f\n", hdr, overall_mbps);
-}
-
-void output_iops(FILE *ofp, char *hdr, int ios)
-{
-	int overall_iops = 0;
-
-	if (last_t_seen)
-		overall_iops = (int) round((double)ios / last_t_seen);
-
-	fprintf(ofp, "%-10s %10d\n", hdr, overall_iops);
-}
-
-int output_summary()
-{
-	FILE *ofp = stdout;
-	double mbps = 0.0;
-	int iops = 0;
-
-	fprintf(ofp, "\n******************** ");
-	fprintf(ofp, "Block Profiler Summary");
-	fprintf(ofp, " ********************\n\n");
-
-	output_section_hdr(ofp, "Throughput in MB/s");
-	output_stat_hdr(ofp);
-	output_throughput(ofp, "Read", all_avgs.blks.rtotal);
-	output_throughput(ofp, "Write", all_avgs.blks.wtotal);
-	output_throughput(ofp, "All", all_avgs.blks.total);
-	fprintf(ofp, "\n");
-
-	output_section_hdr(ofp, "IO Operations/s");
-	output_stat_hdr(ofp);
-	output_iops(ofp, "Read", all_avgs.i2d.r_n);
-	output_iops(ofp, "Write", all_avgs.i2d.w_n);
-	output_iops(ofp, "All", all_avgs.i2d.n);
-	fprintf(ofp, "\n");
-
-	output_section_hdr(ofp, "Block Layer Latencies");
-	output_hdr(ofp, "ALL");
-	__output_avg(ofp, "Q2Qdm", &all_avgs.q2q_dm, 0);
-	__output_avg(ofp, "Q2Adm", &all_avgs.q2a_dm, 0);
-	__output_avg(ofp, "Q2Cdm", &all_avgs.q2c_dm, 0);
-	fprintf(ofp, "\n");
-
-	__output_avg(ofp, "Q2Q", &all_avgs.q2q, 1);
-	__output_avg(ofp, "Q2A", &all_avgs.q2a, 1);
-	__output_avg(ofp, "Q2G", &all_avgs.q2g, 1);
-	__output_avg(ofp, "S2G", &all_avgs.s2g, 1);
-	__output_avg(ofp, "G2I", &all_avgs.g2i, 1);
-	__output_avg(ofp, "Q2M", &all_avgs.q2m, 1);
-	__output_avg(ofp, "I2D", &all_avgs.i2d, 1);
-	__output_avg(ofp, "M2D", &all_avgs.m2d, 1);
-	__output_avg(ofp, "D2C", &all_avgs.d2c, 1);
-	__output_avg(ofp, "Q2C", &all_avgs.q2c, 1);
-	fprintf(ofp, "\n");
-
-	output_section_hdr(ofp, "Device Merge Information");
-	output_dip_merge_ratio(ofp);
-
-	output_histos();
-
-	return 0;
-}
-#endif
 
 int output_avgs(FILE *ofp)
 {
@@ -940,9 +783,6 @@ int output_avgs(FILE *ofp)
 
 	output_section_hdr(ofp, "Active Requests At Q Information");
 	output_actQ_info(ofp);
-
-	output_section_hdr(ofp, "I/O Active Period Information");
-	output_p_live(ofp);
 
 	output_histos();
 

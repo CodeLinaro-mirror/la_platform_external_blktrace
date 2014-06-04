@@ -22,8 +22,6 @@
 
 static void handle_queue(struct io *q_iop)
 {
-	int rw = 0;
-
 	seeki_add(q_iop->dip->q2q_handle, q_iop);
 	update_qregion(&all_regions, q_iop->t.time);
 	dip_update_q(q_iop->dip, q_iop);
@@ -35,15 +33,9 @@ static void handle_queue(struct io *q_iop)
 		update_lq(&last_q, &all_avgs.q2q, q_iop->t.time);
 	}
 
-	q_iop->i_time = q_iop->g_time = q_iop->c_time = q_iop->m_time =
+	q_iop->i_time = q_iop->g_time = q_iop->i_time = q_iop->m_time =
 						q_iop->d_time = (__u64)-1;
 	q_iop->dip->n_qs++;
-	rw = IOP_RW(q_iop);
-	if (rw)
-		q_iop->dip->n_rqs++;
-	else
-		q_iop->dip->n_wqs++;
-	aqd_queue(q_iop->dip, rw);
 
 	q_iop->dip->t_act_q += q_iop->dip->n_act_q;
 	q_iop->dip->n_act_q++;

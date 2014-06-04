@@ -39,11 +39,7 @@ static size_t len;
 static struct blk_io_trace *next_t;
 static long pgsz;
 
-#ifdef PROFILER
-extern int data_is_native;
-#else
 int data_is_native = -1;
-#endif
 
 static inline size_t min_len(size_t a, size_t b)
 {

@@ -1,49 +1,52 @@
-MY_LOCAL_PATH:= $(call my-dir)
-LOCAL_PATH:= $(MY_LOCAL_PATH)
+BUILD_BLKTRACE := false
+
+ifeq ($(BUILD_BLKTRACE), true)
+
+LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
-LOCAL_SRC_FILES:= blktrace.c act_mask.c
-LOCAL_CFLAGS += -D_GNU_SOURCE -DANDROID
-LOCAL_MODULE := blktrace
-LOCAL_MODULE_TAGS := optional
-include $(BUILD_EXECUTABLE)
-
-include $(CLEAR_VARS)
-LOCAL_SRC_FILES:= blkparse.c blkparse_fmt.c rbtree.c act_mask.c
-LOCAL_CFLAGS += -D_GNU_SOURCE -DANDROID
+LOCAL_SRC_FILES := blkparse.c blkparse_fmt.c rbtree.c act_mask.c strverscmp.c
+LOCAL_C_INCLUDES := external/blktrace/
+LOCAL_CFLAGS := -O2 -g -W -Wall -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 LOCAL_MODULE := blkparse
-LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_TAGS :=
+LOCAL_SYSTEM_SHARED_LIBRARIES := libc
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
-LOCAL_SRC_FILES:= verify_blkparse.c
-LOCAL_CFLAGS += -D_GNU_SOURCE -DANDROID
+LOCAL_SRC_FILES := blktrace.c act_mask.c
+LOCAL_C_INCLUDES := external/blktrace/
+LOCAL_CFLAGS := -O2 -g -W -Wall -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_ANDROID_
+LOCAL_MODULE := blktrace
+LOCAL_MODULE_TAGS :=
+LOCAL_SYSTEM_SHARED_LIBRARIES := libc
+include $(BUILD_EXECUTABLE)
+
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := verify_blkparse.c
+LOCAL_C_INCLUDES := external/blktrace/
+LOCAL_CFLAGS := -O2 -g -W -Wall -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 LOCAL_MODULE := verify_blkparse
-LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_TAGS :=
+LOCAL_SYSTEM_SHARED_LIBRARIES := libc
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
-LOCAL_SRC_FILES:= blkrawverify.c
-LOCAL_CFLAGS += -D_GNU_SOURCE -DANDROID
+LOCAL_SRC_FILES := blkrawverify.c
+LOCAL_C_INCLUDES := external/blktrace/
+LOCAL_CFLAGS := -O2 -g -W -Wall -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 LOCAL_MODULE := blkrawverify
-LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_TAGS :=
+LOCAL_SYSTEM_SHARED_LIBRARIES := libc
 include $(BUILD_EXECUTABLE)
 
-include $(CLEAR_VARS)
-LOCAL_SRC_FILES:= 	blkprofiler.c blktrace.c act_mask.c blkparse.c blkparse_fmt.c rbtree.c \
-			btt/aqd.c btt/args.c btt/bno_dump.c btt/bt_timeline.c btt/devmap.c \
-			btt/devs.c btt/dip_rb.c btt/iostat.c btt/latency.c btt/misc.c btt/mmap.c \
-			btt/output.c btt/plat.c btt/p_live.c btt/proc.c btt/q2d.c btt/rstats.c \
-			btt/seek.c btt/trace.c btt/trace_complete.c btt/trace_im.c btt/trace_issue.c \
-			btt/trace_plug.c btt/trace_queue.c btt/trace_remap.c btt/trace_requeue.c \
-			btt/unplug_hist.c \
+#include $(CLEAR_VARS)
+#LOCAL_SRC_FILES := blkiomon.c
+#LOCAL_C_INCLUDES := external/blktrace/
+#LOCAL_CFLAGS := -O2 -g -W -Wall -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+#LOCAL_MODULE := blkiomon
+#LOCAL_MODULE_TAGS :=
+#LOCAL_SYSTEM_SHARED_LIBRARIES := libc
+#include $(BUILD_EXECUTABLE)
 
-LOCAL_C_INCLUDES += 	$(LOCAL_PATH)/btt/
-LOCAL_CFLAGS += -D_GNU_SOURCE -DANDROID -DPROFILER
-LOCAL_MODULE := blkprofiler
-LOCAL_MODULE_TAGS := optional
-include $(BUILD_EXECUTABLE)
-
-include $(LOCAL_PATH)/btt/Android.mk
-LOCAL_PATH:= $(MY_LOCAL_PATH)
-include $(LOCAL_PATH)/btreplay/Android.mk
+endif

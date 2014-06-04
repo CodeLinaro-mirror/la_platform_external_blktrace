@@ -2,7 +2,6 @@
 #define BLKTRACE_H
 
 #include <stdio.h>
-#include <limits.h>
 #include <byteswap.h>
 #include <endian.h>
 
@@ -23,12 +22,6 @@
 
 #define t_sec(t)	((t)->bytes >> 9)
 #define t_kb(t)		((t)->bytes >> 10)
-
-#ifdef ANDROID
-#define __bswap_16(b) bswap_16(b)
-#define __bswap_32(b) bswap_32(b)
-#define __bswap_64(b) bswap_64(b)
-#endif
 
 typedef __u32 u32;
 typedef __u8 u8;
@@ -51,7 +44,7 @@ struct per_cpu_info {
 
 	int fd;
 	int fdblock;
-	char fname[PATH_MAX];
+	char fname[128];
 
 	struct io_stats io_stats;
 
@@ -70,6 +63,10 @@ extern struct timespec abs_start_time;
 
 #define CHECK_MAGIC(t)		(((t)->magic & 0xffffff00) == BLK_IO_TRACE_MAGIC)
 #define SUPPORTED_VERSION	(0x07)
+
+#define __bswap_16 bswap_16
+#define __bswap_32 bswap_32
+#define __bswap_64 bswap_64
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define be16_to_cpu(x)		__bswap_16(x)
@@ -117,7 +114,7 @@ static inline void trace_to_cpu(struct blk_io_trace *t)
 	t->action	= be32_to_cpu(t->action);
 	t->pid		= be32_to_cpu(t->pid);
 	t->device	= be32_to_cpu(t->device);
-	t->cpu		= be32_to_cpu(t->cpu);
+	t->cpu		= be16_to_cpu(t->cpu);
 	t->error	= be16_to_cpu(t->error);
 	t->pdu_len	= be16_to_cpu(t->pdu_len);
 }

@@ -25,15 +25,15 @@
 #include <time.h>
 #include "globals.h"
 
-char bt_timeline_version[] = "2.09";
+char bt_timeline_version[] = "2.08";
 
 char *devices, *exes, *input_name, *output_name, *seek_name, *bno_dump_name;
 char *d2c_name, *q2c_name, *per_io_name, *unplug_hist_name;
 char *sps_name, *aqd_name, *q2d_name, *per_io_trees;
 FILE *rngs_ofp, *avgs_ofp, *xavgs_ofp, *per_io_ofp, *msgs_ofp;
 int verbose, done, time_bounded, output_all_data, seek_absolute;
-int easy_parse_avgs, ignore_remaps, do_p_live;
-double t_astart, t_aend, last_t_seen;
+int easy_parse_avgs, ignore_remaps;
+double t_astart, t_aend;
 unsigned long n_traces;
 struct avgs_info all_avgs;
 unsigned int n_devs;
@@ -44,7 +44,6 @@ LIST_HEAD(all_ios);
 LIST_HEAD(free_ios);
 LIST_HEAD(free_bilinks);
 __u64 q_histo[N_HIST_BKTS], d_histo[N_HIST_BKTS];
-__u32 r_latency_histo[N_READ_HIST_BINS], w_latency_histo[N_WRITE_HIST_BINS];
 
 double plat_freq = 0.0;
 double range_delta = 0.1;
@@ -57,47 +56,20 @@ struct region_info all_regions = {
 
 int process(void);
 
-#ifdef PROFILER
-int start_btt(char *file)
-{
-	char buf[128];
-
-	output_name = file;
-	snprintf(buf, sizeof(buf) - 1, "%s.bin", file);
-	input_name = buf;
-
-	setup_ifile(input_name);
-
-	init_dev_heads();
-	if (process() || output_summary())
-		return 1;
-
-	dip_cleanup();
-	dev_map_exit();
-	dip_exit();
-	pip_exit();
-	io_free_all();
-	region_exit(&all_regions);
-	p_live_exit();
-	clean_allocs();
-
-	return 0;
-}
-#else
 int main(int argc, char *argv[])
 {
 	handle_args(argc, argv);
 
 	init_dev_heads();
 	iostat_init();
-	if (!rstat_init())
-		return 1;
 	if (process() || output_avgs(avgs_ofp) || output_ranges(rngs_ofp))
 		return 1;
+
 	if (iostat_ofp) {
 		fprintf(iostat_ofp, "\n");
 		iostat_dump_stats(iostat_last_stamp, 1);
 	}
+
 	if (msgs_ofp != stdout)
 		fclose(msgs_ofp);
 	if (rngs_ofp != stdout)
@@ -110,16 +82,13 @@ int main(int argc, char *argv[])
 	dip_cleanup();
 	dev_map_exit();
 	dip_exit();
-	rstat_exit();
 	pip_exit();
 	io_free_all();
 	region_exit(&all_regions);
-	p_live_exit();
 	clean_allocs();
 
 	return 0;
 }
-#endif
 
 static inline double tv2dbl(struct timeval *tv)
 {

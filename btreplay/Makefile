@@ -13,7 +13,7 @@ XCFLAGS	= -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 override CFLAGS += $(INCS) $(XCFLAGS) $(OCFLAGS)
 
 PROGS	= btrecord btreplay
-LIBS	= -laio -lrt -lpthread
+LIBS	= -laio -lrt
 
 all: depend $(PROGS)
 

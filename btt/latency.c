@@ -26,16 +26,18 @@ static inline void latency_out(FILE *ofp, __u64 tstamp, __u64 latency)
 		fprintf(ofp, "%lf %lf\n", TO_SEC(tstamp), TO_SEC(latency));
 }
 
-FILE *latency_open(struct d_info *dip, char *name, char *post)
+FILE *latency_open(__u32 device, char *name, char *post)
 {
 	FILE *fp = NULL;
 
 	if (name) {
-		size_t tlen = strlen(name) + strlen(dip->dip_name)
-					   + strlen(post) + 32;
-		char oname[tlen];
+		int mjr, mnr;
+		char oname[strlen(name) + 32];
 
-		sprintf(oname, "%s_%s_%s.dat", name, dip->dip_name, post);
+		mjr = device >> MINORBITS;
+		mnr = device & ((1 << MINORBITS) - 1);
+
+		sprintf(oname, "%s_%03d,%03d_%s.dat", name, mjr, mnr, post);
 		if ((fp = my_fopen(oname, "w")) == NULL)
 			perror(oname);
 		else
@@ -47,43 +49,25 @@ FILE *latency_open(struct d_info *dip, char *name, char *post)
 
 void latency_alloc(struct d_info *dip)
 {
-	dip->q2d_ofp	= latency_open(dip, q2d_name, "q2d");
-	dip->q2d_rofp	= latency_open(dip, q2d_name, "rq2d");
-	dip->q2d_wofp	= latency_open(dip, q2d_name, "wq2d");
-	dip->d2c_ofp	= latency_open(dip, d2c_name, "d2c");
-	dip->d2c_rofp	= latency_open(dip, d2c_name, "rd2c");
-	dip->d2c_wofp	= latency_open(dip, d2c_name, "wd2c");
-	dip->q2c_ofp	= latency_open(dip, q2c_name, "q2c");
-	dip->q2c_rofp	= latency_open(dip, q2c_name, "rq2c");
-	dip->q2c_wofp	= latency_open(dip, q2c_name, "wq2c");
+	dip->q2d_ofp = latency_open(dip->device, q2d_name, "q2d");
+	dip->d2c_ofp = latency_open(dip->device, d2c_name, "d2c");
+	dip->q2c_ofp = latency_open(dip->device, q2c_name, "q2c");
 }
 
-void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency, int rw)
+void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency)
 {
 	plat_x2c(dip->q2d_plat_handle, tstamp, latency);
 	latency_out(dip->q2d_ofp, tstamp, latency);
-	if (rw)
-		latency_out(dip->q2d_rofp, tstamp, latency);
-	else
-		latency_out(dip->q2d_wofp, tstamp, latency);
 }
 
-void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw)
+void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency)
 {
 	plat_x2c(dip->d2c_plat_handle, tstamp, latency);
 	latency_out(dip->d2c_ofp, tstamp, latency);
-	if (rw)
-		latency_out(dip->d2c_rofp, tstamp, latency);
-	else
-		latency_out(dip->d2c_wofp, tstamp, latency);
 }
 
-void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw)
+void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency)
 {
 	plat_x2c(dip->q2c_plat_handle, tstamp, latency);
 	latency_out(dip->q2c_ofp, tstamp, latency);
-	if (rw)
-		latency_out(dip->q2c_rofp, tstamp, latency);
-	else
-		latency_out(dip->q2c_wofp, tstamp, latency);
 }
