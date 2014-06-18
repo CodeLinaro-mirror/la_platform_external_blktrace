@@ -79,49 +79,31 @@ static inline void update_cregion(struct region_info *reg, __u64 time)
 	update_range(&reg->cranges, time);
 }
 
-static inline void avg_update(struct avg_info *ap, __u64 t, int rw)
+static inline void avg_update(struct avg_info *ap, __u64 t)
 {
-	if (ap->n++ == 0) {
-		ap->min = ap->total = ap->max = t;
-		ap->m2 = BIT_TIME(ap->total) * BIT_TIME(ap->total);
-		if (rw == 1) {
-			ap->rtotal = t;
-			ap->r_n++;
-		} else if (rw == 0) {
-			ap->wtotal = t;
-			ap->w_n++;
-		}
-	} else {
-		if (t < ap->min)
-			ap->min = t;
-		else if (t > ap->max)
-			ap->max = t;
-		ap->total += t;
-		ap->m2 += BIT_TIME(t) * BIT_TIME(t);
-		if (rw == 1) {
-			ap->r_n++;
-			ap->rtotal += t;
-		} else if (rw == 0){
-			ap->w_n++;
-			ap->wtotal += t;
-		}
-	}
+        if (ap->n++ == 0)
+                ap->min = ap->total = ap->max = t;
+        else {
+                if (t < ap->min)
+                        ap->min = t;
+                else if (t > ap->max)
+                        ap->max = t;
+                ap->total += t;
+        }
 }
 
 static inline void avg_update_n(struct avg_info *ap, __u64 t, int n)
 {
-	if (ap->n == 0) {
-		ap->min = ap->max = t;
+        if (ap->n == 0) {
+                ap->min = ap->max = t;
 		ap->total = (n * t);
-		ap->m2 = n * (BIT_TIME(t) * BIT_TIME(t));
 	} else {
-		if (t < ap->min)
-			ap->min = t;
-		else if (t > ap->max)
-			ap->max = t;
-		ap->total += (n * t);
-		ap->m2 += (n * (BIT_TIME(t) * BIT_TIME(t)));
-	}
+                if (t < ap->min)
+                        ap->min = t;
+                else if (t > ap->max)
+                        ap->max = t;
+                ap->total += (n * t);
+        }
 
 	ap->n += n;
 }
@@ -135,7 +117,7 @@ static inline void avg_unupdate(struct avg_info *ap, __u64 t)
 static inline void update_lq(__u64 *last_q, struct avg_info *avg, __u64 time)
 {
 	if (*last_q != ((__u64)-1))
-		avg_update(avg, (time > *last_q) ? time - *last_q : 1, -1);
+		avg_update(avg, (time > *last_q) ? time - *last_q : 1);
 	*last_q = time;
 }
 
@@ -197,10 +179,10 @@ static inline void io_release(struct io *iop)
 	io_free(iop);
 }
 
-#define UPDATE_AVGS(_avg, _iop, _pip, _time, _rw) do {			\
-		avg_update(&all_avgs. _avg , _time, _rw);		\
-		avg_update(&_iop->dip->avgs. _avg , _time, _rw);	\
-		if (_pip) avg_update(&_pip->avgs. _avg , _time, _rw);	\
+#define UPDATE_AVGS(_avg, _iop, _pip, _time) do {			\
+		avg_update(&all_avgs. _avg , _time);			\
+		avg_update(&_iop->dip->avgs. _avg , _time);		\
+		if (_pip) avg_update(&_pip->avgs. _avg , _time);	\
 	} while (0)
 
 #define UPDATE_AVGS_N(_avg, _iop, _pip, _time, _n) do {			\
@@ -215,30 +197,30 @@ static inline void io_release(struct io *iop)
 		if (_pip) avg_unupdate(&_pip->avgs. _avg , _time);	\
 	} while (0)
 
-static inline void update_q2c(struct io *iop, __u64 c_time, int rw)
+static inline void update_q2c(struct io *iop, __u64 c_time)
 {
 	if (remapper_dev(iop->dip->device))
-		UPDATE_AVGS(q2c_dm, iop, iop->pip, c_time, rw);
+		UPDATE_AVGS(q2c_dm, iop, iop->pip, c_time);
 	else
-		UPDATE_AVGS(q2c, iop, iop->pip, c_time, rw);
+		UPDATE_AVGS(q2c, iop, iop->pip, c_time);
 }
 
 static inline void update_q2a(struct io *iop, __u64 a_time)
 {
 	if (remapper_dev(iop->dip->device))
-		UPDATE_AVGS(q2a_dm, iop, iop->pip, a_time, -1);
+		UPDATE_AVGS(q2a_dm, iop, iop->pip, a_time);
 	else
-		UPDATE_AVGS(q2a, iop, iop->pip, a_time, -1);
+		UPDATE_AVGS(q2a, iop, iop->pip, a_time);
 }
 
 static inline void update_q2g(struct io *iop, __u64 g_time)
 {
-	UPDATE_AVGS(q2g, iop, iop->pip, g_time, -1);
+	UPDATE_AVGS(q2g, iop, iop->pip, g_time);
 }
 
 static inline void update_s2g(struct io *iop, __u64 g_time)
 {
-	UPDATE_AVGS(s2g, iop, iop->pip, g_time, -1);
+	UPDATE_AVGS(s2g, iop, iop->pip, g_time);
 }
 
 static inline void unupdate_q2g(struct io *iop, __u64 g_time)
@@ -248,7 +230,7 @@ static inline void unupdate_q2g(struct io *iop, __u64 g_time)
 
 static inline void update_g2i(struct io *iop, __u64 i_time)
 {
-	UPDATE_AVGS(g2i, iop, iop->pip, i_time, -1);
+	UPDATE_AVGS(g2i, iop, iop->pip, i_time);
 }
 
 static inline void unupdate_g2i(struct io *iop, __u64 i_time)
@@ -258,7 +240,7 @@ static inline void unupdate_g2i(struct io *iop, __u64 i_time)
 
 static inline void update_q2m(struct io *iop, __u64 m_time)
 {
-	UPDATE_AVGS(q2m, iop, iop->pip, m_time, -1);
+	UPDATE_AVGS(q2m, iop, iop->pip, m_time);
 }
 
 static inline void unupdate_q2m(struct io *iop, __u64 m_time)
@@ -266,9 +248,9 @@ static inline void unupdate_q2m(struct io *iop, __u64 m_time)
 	UNUPDATE_AVGS(q2m, iop, iop->pip, m_time);
 }
 
-static inline void update_i2d(struct io *iop, __u64 d_time, int rw)
+static inline void update_i2d(struct io *iop, __u64 d_time)
 {
-	UPDATE_AVGS(i2d, iop, iop->pip, d_time, rw);
+	UPDATE_AVGS(i2d, iop, iop->pip, d_time);
 }
 
 static inline void unupdate_i2d(struct io *iop, __u64 d_time)
@@ -276,9 +258,9 @@ static inline void unupdate_i2d(struct io *iop, __u64 d_time)
 	UNUPDATE_AVGS(i2d, iop, iop->pip, d_time);
 }
 
-static inline void update_m2d(struct io *iop, __u64 d_time, int rw)
+static inline void update_m2d(struct io *iop, __u64 d_time)
 {
-	UPDATE_AVGS(m2d, iop, iop->pip, d_time, rw);
+	UPDATE_AVGS(m2d, iop, iop->pip, d_time);
 }
 
 static inline void unupdate_m2d(struct io *iop, __u64 d_time)
@@ -286,18 +268,18 @@ static inline void unupdate_m2d(struct io *iop, __u64 d_time)
 	UNUPDATE_AVGS(m2d, iop, iop->pip, d_time);
 }
 
-static inline void update_d2c(struct io *iop, __u64 c_time, int rw)
+static inline void update_d2c(struct io *iop, __u64 c_time)
 {
-	UPDATE_AVGS(d2c, iop, iop->pip, c_time, rw);
+	UPDATE_AVGS(d2c, iop, iop->pip, c_time);
 }
 
-static inline void update_blks(struct io *iop, int rw)
+static inline void update_blks(struct io *iop)
 {
 	__u64 nblks = iop->t.bytes >> 9;
-	avg_update(&all_avgs.blks, nblks, rw);
-	avg_update(&iop->dip->avgs.blks, nblks, rw);
+	avg_update(&all_avgs.blks, nblks);
+	avg_update(&iop->dip->avgs.blks, nblks);
 	if (iop->pip)
-		avg_update(&iop->pip->avgs.blks, nblks, rw);
+		avg_update(&iop->pip->avgs.blks, nblks);
 }
 
 static inline struct rb_root *__get_root(struct d_info *dip, enum iop_type type)
@@ -369,20 +351,6 @@ static inline void update_q_histo(__u64 nbytes)
 static inline void update_d_histo(__u64 nbytes)
 {
 	d_histo[histo_idx(nbytes)]++;
-}
-
-static inline void update_latency_histo(__u64 nbytes, __u64 latency, int rw)
-{
-	double latency_per_block = (double)latency / (double)(nbytes >> 9);
-	int idx = 0;
-
-	if (rw) {
-		idx = min((int) round(TO_MSEC(latency_per_block)), N_READ_HIST_BINS -1);
-		r_latency_histo[idx]++;
-	} else {
-		idx = min((int) round(TO_MSEC(latency_per_block)), N_WRITE_HIST_BINS -1);
-		w_latency_histo[idx]++;
-	}
 }
 
 static inline struct io *io_first_list(struct list_head *head)

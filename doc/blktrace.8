@@ -66,10 +66,19 @@ blktrace may also be run concurrently with blkparse to produce
 .TP 2
 \- 
 The default behaviour for blktrace is to run forever until explicitly
-killed by the user (via a control-C, or sending SIGINT signal to the
-process via invocation the kill (1) utility). Also you can specify a
-run-time duration for blktrace via the \fB\-w\fR option -- then
-blktrace will run for the specified number of seconds, and then halt.
+killed by the user (via a control-C, or kill utility invocation).
+There are two ways to modify this:
+
+.TP 5
+  1. 
+You may utilise the blktrace utility itself to kill
+a running trace -- via the \fB\-k\fR option.
+
+.TP 5
+  2.
+You can specify a run-time duration for blktrace via the
+\fB\-w\fR option -- then blktrace will run for the specified number
+of seconds, and then halt.
 
 
 .SH OPTIONS
@@ -105,62 +114,30 @@ Adds \fIdev\fR as a device to trace
 
 \-I \fIfile\fR
 .br
-\-\-input\-devs=\fIfile\fR
+\-\-input-devs=\fIfile\fR 
 .RS
 Adds the devices found in \fIfile\fR as devices to trace
 .RE
 
+\-k 
+.br
+\-\-kill 
+.RS
+Kill on-going trace  
+.RE
+
 \-n \fInum\-sub\fR 
 .br
-\-\-num\-sub\-buffers=\fInum-sub\fR
+\-\-num\-sub=\fInum-sub\fR    
 .RS
 Specifies number of buffers to use. blktrace defaults to 4 sub buffers.
 .RE
 
-\-l
+\-o \fIfile\fR 
 .br
-\-\-listen
+\-\-output=\fIfile\fR        
 .RS
-Run in network listen mode (blktrace server)
-.RE
-
-\-h \fIhostname\fR
-.br
-\-\-host=\fIhostname\fR
-.RS
-Run in network client mode, connecting to the given host
-.RE
-
-\-p \fInumber\fR
-.br
-\-\-port=\fInumber\fR
-.RS
-Network port to use (default 8462)
-.RE
-
-\-s
-.br
-\-\-no\-sendfile
-.RS
-Make the network client NOT use sendfile() to transfer data
-.RE
-
-\-o \fIbasename\fR
-.br
-\-\-output=\fIbasename\fR
-.RS
-Specifies base name for input files. Default is device.blktrace.cpu.
-Specifying -o - runs in live mode with blkparse (writing data to standard out).
-.RE
-
-\-D \fIdir\fR
-.br
-\-\-output\-dir=\fIdir\fR
-.RS
-Prepend \fIfile\fR to output file name(s)
-
-This only works when supplying a single device, or when piping the output
-via "-o -" with multiple devices.
+Prepend \fIfile\fR to output file name(s)  
 .RE
 
 \-r \fIrel-path\fR
@@ -170,17 +147,9 @@ via "-o -" with multiple devices.
 Specifies debugfs mount point  
 .RE
 
-\-v
-.br
-\-\-version
-.RS
-Outputs version
-.RE
-
 \-V               
 .br
-\-\-version
-.RS
+\-\-version                  
 Outputs version  
 .RE
 
@@ -219,8 +188,6 @@ line options.
 \fIwrite\fR: write traces
 .br
 \fInotify\fR: trace messages
-.br
-\fIdrv_data\fR: additional driver specific trace
 .RE
 
 

@@ -22,16 +22,7 @@
 
 static void handle_requeue(struct io *r_iop)
 {
-	int rw = 0;
-
 	r_iop->dip->n_qs++;
-	rw = IOP_RW(r_iop);
-	if (rw)
-		r_iop->dip->n_rqs++;
-	else
-		r_iop->dip->n_wqs++;
-	aqd_queue(r_iop->dip, rw);
-
 	r_iop->dip->t_act_q += r_iop->dip->n_act_q;
 	r_iop->dip->n_act_q++;
 }

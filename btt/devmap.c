@@ -76,7 +76,6 @@ int dev_map_read(char *fname)
 			break;
 	}
 
-	fclose(fp);
 	return 0;
 }
 

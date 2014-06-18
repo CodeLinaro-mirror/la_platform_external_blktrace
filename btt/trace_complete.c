@@ -55,35 +55,29 @@ static void handle_complete(struct io *c_iop)
 	struct list_head *p, *q;
 	__u64 d_time = (__u64)-1;
 	FILE *pit_fp = c_iop->dip->pit_fp;
-	double cur = BIT_TIME(c_iop->t.time);
-	int rw = IOP_RW(c_iop);
 
-	update_blks(c_iop, rw);
+	update_blks(c_iop);
 	update_cregion(&all_regions, c_iop->t.time);
 	update_cregion(&c_iop->dip->regions, c_iop->t.time);
 	if (c_iop->pip)
 		update_cregion(&c_iop->pip->regions, c_iop->t.time);
-	aqd_complete(c_iop->dip->aqd_handle, cur);
-	rstat_add(c_iop->dip->rstat_handle, c_iop->t.time, c_iop->t.bytes >> 9, rw);
+	aqd_complete(c_iop->dip->aqd_handle, BIT_TIME(c_iop->t.time));
 
 	dip_foreach_list(c_iop, IOP_Q, &head);
 	list_for_each_safe(p, q, &head) {
 		struct io *q_iop = list_entry(p, struct io, f_head);
 		__u64 q2c = tdelta(q_iop->t.time, c_iop->t.time);
-		rw = IOP_RW(q_iop);
 
 		c_iop->bytes_left -= q_iop->t.bytes;
 
-		update_q2c(q_iop, q2c, rw);
-		latency_q2c(q_iop->dip, q_iop->t.time, q2c, rw);
-		update_latency_histo(q_iop->t.bytes, q2c, rw);
+		update_q2c(q_iop, q2c);
+		latency_q2c(q_iop->dip, q_iop->t.time, q2c);
 
 		if (q_iop->d_time != (__u64)-1) {
 			__u64 d2c = tdelta(q_iop->d_time, c_iop->t.time);
 
-			p_live_add(q_iop->dip, q_iop->d_time, c_iop->t.time);
-			update_d2c(q_iop, d2c, rw);
-			latency_d2c(q_iop->dip, c_iop->t.time, d2c, rw);
+			update_d2c(q_iop, d2c);
+			latency_d2c(q_iop->dip, c_iop->t.time, d2c);
 			iostat_complete(q_iop, c_iop);
 
 			d_time = q_iop->d_time;

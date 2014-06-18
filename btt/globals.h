@@ -21,8 +21,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include <math.h>
-
 #include "blktrace.h"
 #include "rbtree.h"
 #include "list.h"
@@ -37,9 +35,6 @@
  */
 #define N_HIST_BKTS	1025
 
-#define N_READ_HIST_BINS	60001
-#define N_WRITE_HIST_BINS	60001
-
 #define BIT_TIME(t)	((double)SECONDS(t) + ((double)NANO_SECONDS(t) / 1.0e9))
 
 #define BIT_START(iop)	((iop)->t.sector)
@@ -49,7 +44,6 @@
 
 #define TO_SEC(nanosec)	((double)(nanosec) / 1.0e9)
 #define TO_MSEC(nanosec) (1000.0 * TO_SEC(nanosec))
-#define MSEC_IN_SEC	1000
 
 enum iop_type {
 	IOP_Q = 0,
@@ -79,11 +73,8 @@ struct io_list {
 
 struct avg_info {
 	__u64 min, max, total;
-	__u64 rtotal, wtotal;
 	double avg;
-	int n, r_n, w_n;
-	double variance;
-	long double m2;		/* latency second moment */
+	int n;
 };
 
 struct avgs_info {
@@ -139,16 +130,14 @@ struct d_info {
 	struct list_head all_head, hash_head;
 	void *heads;
 	struct region_info regions;
-	char *devmap, dip_name[256];
+	char *devmap;
 	void *q2q_handle, *seek_handle, *bno_dump_handle, *up_hist_handle;
-	void *q2d_priv, *aqd_handle, *rstat_handle, *p_live_handle;
+	void *q2d_priv, *aqd_handle;
 	void *q2d_plat_handle, *q2c_plat_handle, *d2c_plat_handle;
-	FILE *q2d_ofp, *q2d_rofp, *q2d_wofp;
-	FILE *d2c_ofp, *d2c_rofp, *d2c_wofp;
-	FILE *q2c_ofp, *q2c_rofp, *q2c_wofp, *pit_fp;
+	FILE *q2d_ofp, *d2c_ofp, *q2c_ofp, *pit_fp;
 	struct avgs_info avgs;
 	struct stats stats, all_stats;
-	__u64 last_q, n_qs, n_rqs, n_wqs, n_ds;
+	__u64 last_q, n_qs, n_ds;
 	__u64 n_act_q, t_act_q;	/* # currently active when Q comes in */
 	__u32 device;
 
@@ -174,22 +163,17 @@ struct io {
 	enum iop_type type;
 };
 
-struct p_live_info {
-	unsigned long nlives;
-	double avg_live, avg_lull, p_live;
-};
-
 /* bt_timeline.c */
 
 extern char bt_timeline_version[], *devices, *exes, *input_name, *output_name;
 extern char *seek_name, *iostat_name, *d2c_name, *q2c_name, *per_io_name;
 extern char *bno_dump_name, *unplug_hist_name, *sps_name, *aqd_name, *q2d_name;
 extern char *per_io_trees;
-extern double range_delta, plat_freq, last_t_seen;
+extern double range_delta, plat_freq;
 extern FILE *rngs_ofp, *avgs_ofp, *xavgs_ofp, *iostat_ofp, *per_io_ofp;
 extern FILE *msgs_ofp;
 extern int verbose, done, time_bounded, output_all_data, seek_absolute;
-extern int easy_parse_avgs, ignore_remaps, do_p_live;
+extern int easy_parse_avgs, ignore_remaps;
 extern unsigned int n_devs;
 extern unsigned long n_traces;
 extern struct list_head all_devs, all_procs;
@@ -201,18 +185,15 @@ extern __u64 iostat_interval, iostat_last_stamp;
 extern time_t genesis, last_vtrace;
 extern double t_astart, t_aend;
 extern __u64 q_histo[N_HIST_BKTS], d_histo[N_HIST_BKTS];
-extern __u32 r_latency_histo[N_READ_HIST_BINS], w_latency_histo[N_WRITE_HIST_BINS];
-extern unsigned int calc_freq;
 
 /* args.c */
 void handle_args(int argc, char *argv[]);
 void clean_args();
 
 /* aqd.c */
-void *aqd_alloc(struct d_info *dip);
+void *aqd_alloc(char *str);
 void aqd_free(void *info);
 void aqd_clean(void);
-void aqd_queue(struct d_info *dip, int rw);
 void aqd_issue(void *info, double ts);
 void aqd_complete(void *info, double ts);
 
@@ -256,15 +237,14 @@ void iostat_dump_stats(__u64 stamp, int all);
 /* latency.c */
 void latency_alloc(struct d_info *dip);
 void latency_clean(void);
-void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
-void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
-void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency, int rw);
+void latency_q2d(struct d_info *dip, __u64 tstamp, __u64 latency);
+void latency_d2c(struct d_info *dip, __u64 tstamp, __u64 latency);
+void latency_q2c(struct d_info *dip, __u64 tstamp, __u64 latency);
 
 /* misc.c */
 void add_file(FILE *fp, char *oname);
 void add_buf(void *buf);
 char *make_dev_hdr(char *pad, size_t len, struct d_info *dip, int add_parens);
-char *mkhandle(struct d_info *dip, char *str, size_t len);
 FILE *my_fopen(const char *path, const char *mode);
 int my_open(const char *path, int flags);
 void dbg_ping(void);
@@ -277,9 +257,6 @@ int next_trace(struct blk_io_trace *t, void **pdu);
 double pct_done(void);
 
 /* output.c */
-#ifdef PROFILER
-int output_summary();
-#endif
 int output_avgs(FILE *ofp);
 int output_ranges(FILE *ofp);
 
@@ -290,24 +267,16 @@ void pip_update_q(struct io *iop);
 void pip_foreach_out(void (*f)(struct p_info *, void *), void *arg);
 void pip_exit(void);
 
-/* bno_dump.c */
-void *bno_dump_alloc(struct d_info *dip);
+void *bno_dump_alloc(__u32 device);
 void bno_dump_free(void *param);
 void bno_dump_add(void *handle, struct io *iop);
 void bno_dump_clean(void);
 
 /* plat.c */
-void *plat_alloc(struct d_info *dip, char *post);
+void *plat_alloc(char *str);
 void plat_free(void *info);
 void plat_clean(void);
 void plat_x2c(void *info, __u64 ts, __u64 latency);
-
-/* p_live.c */
-void *p_live_alloc(void);
-void p_live_free(void *p);
-void p_live_add(struct d_info *dip, __u64 dt, __u64 ct);
-void p_live_exit(void);
-struct p_live_info *p_live_get(struct d_info *dip, int base_y);
 
 /* q2d.c */
 void q2d_histo_add(void *priv, __u64 q2d);
@@ -319,15 +288,8 @@ void q2d_display(FILE *fp, void *priv);
 int q2d_ok(void *priv);
 void q2d_acc(void *a1, void *a2);
 
-/* rstats.c */
-void *rstat_alloc(struct d_info *dip);
-void rstat_free(void *ptr);
-void rstat_add(void *ptr, double cur, unsigned long long nblks, int rw);
-int rstat_init(void);
-void rstat_exit(void);
-
 /* seek.c */
-void *seeki_alloc(struct d_info *dip, char *post);
+void *seeki_alloc(char *str);
 void seeki_free(void *param);
 void seek_clean(void);
 void seeki_add(void *handle, struct io *iop);
@@ -376,7 +338,7 @@ void trace_remap(struct io *a_iop);
 void trace_requeue(struct io *r_iop);
 
 /* unplug_hist.c */
-void *unplug_hist_alloc(struct d_info *dip);
+void *unplug_hist_alloc(__u32 device);
 void unplug_hist_free(void *arg);
 void unplug_hist_add(struct io *u_iop);
 

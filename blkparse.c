@@ -36,7 +36,7 @@
 #include "rbtree.h"
 #include "jhash.h"
 
-static char blkparse_version[] = "1.0.5";
+static char blkparse_version[] = "1.0.1";
 
 struct skip_info {
 	unsigned long start, end;
@@ -276,11 +276,7 @@ static int verbose;
 static unsigned int act_mask = -1U;
 static int stats_printed;
 static int bin_output_msgs = 1;
-#ifdef PROFILER
-extern int data_is_native;
-#else
 int data_is_native = -1;
-#endif
 
 static FILE *dump_fp;
 static char *dump_binary;
@@ -566,9 +562,7 @@ static struct process_pid_map *add_ppm_hash(pid_t pid, const char *name)
 		ppm = malloc(sizeof(*ppm));
 		memset(ppm, 0, sizeof(*ppm));
 		ppm->pid = pid;
-		memset(ppm->comm, 0, sizeof(ppm->comm));
-		strncpy(ppm->comm, name, sizeof(ppm->comm));
-		ppm->comm[sizeof(ppm->comm) - 1] = '\0';
+		strcpy(ppm->comm, name);
 		ppm->hash_next = ppm_hash_table[hash_idx];
 		ppm_hash_table[hash_idx] = ppm;
 	}
@@ -1681,7 +1675,7 @@ static void dump_io_stats(struct per_dev_info *pdi, struct io_stats *ios,
 		fprintf(ofp, " PC Reads Req.:   %s\t\t", size_cnv(x, ios->rrqueue_pc, 0));
 		fprintf(ofp, " PC Writes Req.:   %s\n", size_cnv(x, ios->wrqueue_pc, 0));
 		fprintf(ofp, " PC Reads Compl.: %s\t\t", size_cnv(x, ios->creads_pc, 0));
-		fprintf(ofp, " PC Writes Compl.: %s\n", size_cnv(x, ios->cwrites_pc, 0));
+		fprintf(ofp, " PC Writes Compl.: %s\n", size_cnv(x, ios->cwrites, 0));
 	}
 	fprintf(ofp, " IO unplugs:      %'8lu%8c\t", ios->io_unplugs, ' ');
 	fprintf(ofp, " Timer unplugs:    %'8lu\n", ios->timer_unplugs);
@@ -1710,7 +1704,7 @@ static int ppi_name_compare(const void *p1, const void *p2)
 	struct per_process_info *ppi2 = *((struct per_process_info **) p2);
 	int res;
 
-	res = strcmp(ppi1->ppm->comm, ppi2->ppm->comm);
+	res = strverscmp(ppi1->ppm->comm, ppi2->ppm->comm);
 	if (!res)
 		res = ppi1->ppm->pid > ppi2->ppm->pid;
 
@@ -1968,7 +1962,6 @@ static int check_cpu_map(struct per_dev_info *pdi)
 	 * create a map of the cpus we have traces for
 	 */
 	cpu_map = malloc(pdi->cpu_map_max / sizeof(long));
-	memset(cpu_map, 0, sizeof(*cpu_map));
 	n = rb_first(&rb_sort_root);
 	while (n) {
 		__t = rb_entry(n, struct trace, rb_node);
@@ -2072,8 +2065,7 @@ static void show_entries_rb(int force)
 			break;
 		}
 
-		if (!(bit->action == BLK_TN_MESSAGE) &&
-		    check_sequence(pdi, t, force))
+		if (check_sequence(pdi, t, force))
 			break;
 
 		if (!force && bit->time > last_allowed_time)
@@ -2084,8 +2076,7 @@ static void show_entries_rb(int force)
 		if (!pci || pci->cpu != bit->cpu)
 			pci = get_cpu_info(pdi, bit->cpu);
 
-		if (!(bit->action == BLK_TN_MESSAGE))
-			pci->last_sequence = bit->sequence;
+		pci->last_sequence = bit->sequence;
 
 		pci->nelems++;
 
@@ -2361,13 +2352,7 @@ static int ms_prime(struct ms_stream *msp)
 		if (verify_trace(bit))
 			goto err;
 
-		if (bit->cpu != pci->cpu) {
-			fprintf(stderr, "cpu %d trace info has error cpu %d\n",
-				pci->cpu, bit->cpu);
-			continue;
-		}
-
-		if (bit->action & BLK_TC_ACT(BLK_TC_NOTIFY) && bit->action != BLK_TN_MESSAGE) {
+        if (bit->action & BLK_TC_ACT(BLK_TC_NOTIFY) && bit->action != BLK_TN_MESSAGE) {
 			handle_notify(bit);
 			output_binary(bit, sizeof(*bit) + bit->pdu_len);
 			bit_free(bit);
@@ -2432,13 +2417,15 @@ static int setup_file(struct per_dev_info *pdi, int cpu)
 
 	p = strdup(pdi->name);
 	dname = dirname(p);
-	if (!strcmp(dname, ".")) {
-		if (!input_dir)
-			input_dir = ".";
-		len = snprintf(pci->fname, strlen(input_dir)+2,
-				"%s/", input_dir);
+	if (strcmp(dname, ".")) {
+		input_dir = dname;
+		p = strdup(pdi->name);
+		strcpy(pdi->name, basename(p));
 	}
 	free(p);
+
+	if (input_dir)
+		len = sprintf(pci->fname, "%s/", input_dir);
 
 	snprintf(pci->fname + len, sizeof(pci->fname)-1-len,
 		 "%s.blktrace.%d", pdi->name, pci->cpu);
@@ -2531,12 +2518,6 @@ static int do_file(void)
 
 		for (cpu = 0; setup_file(pdi, cpu); cpu++)
 			;
-
-		if (!cpu) {
-			fprintf(stderr,"No input files found for %s\n",
-				pdi->name);
-			return 1;
-		}
 	}
 
 	/*
@@ -2693,8 +2674,6 @@ static char usage_str[] =    "\n\n" \
 	"[ -M                | --no-msgs\n" \
 	"[ -v                | --verbose ]\n" \
 	"[ -V                | --version ]\n\n" \
-	"\t-a Only trace specified actions. See documentation\n" \
-	"\t-A Give trace mask as a single value. See documentation\n" \
 	"\t-b stdin read batching\n" \
 	"\t-d Output file. If specified, binary data is written to file\n" \
 	"\t-D Directory to prepend to input file names\n" \
@@ -2717,107 +2696,15 @@ static char usage_str[] =    "\n\n" \
 
 static void usage(char *prog)
 {
-	fprintf(stderr, "Usage: %s %s", prog, usage_str);
+	fprintf(stderr, "Usage: %s %s %s", prog, blkparse_version, usage_str);
 }
 
-int run_blkparse()
-{
-	int ret = 0, mode = 0;
-	char *ofp_buffer = NULL;
-	char *bin_ofp_buffer = NULL;
-
-	memset(&rb_sort_root, 0, sizeof(rb_sort_root));
-
-	signal(SIGINT, handle_sigint);
-	signal(SIGHUP, handle_sigint);
-	signal(SIGTERM, handle_sigint);
-
-	setlocale(LC_NUMERIC, "en_US");
-
-	if (text_output) {
-		if (!output_name) {
-			ofp = fdopen(STDOUT_FILENO, "w");
-			mode = _IOLBF;
-		} else {
-			char ofname[128];
-
-			snprintf(ofname, sizeof(ofname) - 1, "%s", output_name);
-			ofp = fopen(ofname, "w");
-			mode = _IOFBF;
-		}
-
-		if (!ofp) {
-			perror("fopen");
-			return 1;
-		}
-
-		ofp_buffer = malloc(4096);
-		if (setvbuf(ofp, ofp_buffer, mode, 4096)) {
-			perror("setvbuf");
-			return 1;
-		}
-	}
-
-	if (dump_binary) {
-		if (!strcmp(dump_binary, "-"))
-			dump_fp = stdout;
-		else {
-			dump_fp = fopen(dump_binary, "w");
-			if (!dump_fp) {
-				perror(dump_binary);
-				dump_binary = NULL;
-				return 1;
-			}
-		}
-		bin_ofp_buffer = malloc(128 * 1024);
-		if (setvbuf(dump_fp, bin_ofp_buffer, _IOFBF, 128 * 1024)) {
-			perror("setvbuf binary");
-			return 1;
-		}
-	}
-
-	if (pipeline)
-		ret = do_fifo();
-	else
-		ret = do_file();
-
-	if (!ret)
-		show_stats();
-
-	if (have_drv_data && !dump_binary)
-		printf("\ndiscarded traces containing low-level device driver "
-		       "specific data (only available in binary output)\n");
-
-	if (ofp_buffer) {
-		fflush(ofp);
-		free(ofp_buffer);
-	}
-	if (bin_ofp_buffer) {
-		fflush(dump_fp);
-		free(bin_ofp_buffer);
-	}
-	return ret;
-}
-
-#ifdef PROFILER
-int start_blkparse(char *file)
-{
-	char buf_txt[128];
-	char buf_bin[128];
-
-	snprintf(buf_txt, sizeof(buf_txt) - 1, "%s.txt", file);
-	output_name = buf_txt;
-	snprintf(buf_bin, sizeof(buf_bin) - 1, "%s.bin", file);
-	dump_binary = buf_bin;
-	if (resize_devices(file) != 0) return 1;
-
-	return run_blkparse();
-}
-#else
 int main(int argc, char *argv[])
 {
-	int i, c;
+	int i, c, ret, mode;
 	int act_mask_tmp = 0;
+	char *ofp_buffer = NULL;
+	char *bin_ofp_buffer = NULL;
 
 	while ((c = getopt_long(argc, argv, S_OPTS, l_opts, NULL)) != -1) {
 		switch (c) {
@@ -2920,6 +2807,71 @@ int main(int argc, char *argv[])
 	if (act_mask_tmp != 0)
 		act_mask = act_mask_tmp;
 
-	return run_blkparse();
+	memset(&rb_sort_root, 0, sizeof(rb_sort_root));
+
+	signal(SIGINT, handle_sigint);
+	signal(SIGHUP, handle_sigint);
+	signal(SIGTERM, handle_sigint);
+
+	setlocale(LC_NUMERIC, "en_US");
+
+	if (text_output) {
+		if (!output_name) {
+			ofp = fdopen(STDOUT_FILENO, "w");
+			mode = _IOLBF;
+		} else {
+			char ofname[128];
+
+			snprintf(ofname, sizeof(ofname) - 1, "%s", output_name);
+			ofp = fopen(ofname, "w");
+			mode = _IOFBF;
+		}
+
+		if (!ofp) {
+			perror("fopen");
+			return 1;
+		}
+
+		ofp_buffer = malloc(4096);
+		if (setvbuf(ofp, ofp_buffer, mode, 4096)) {
+			perror("setvbuf");
+			return 1;
+		}
+	}
+
+	if (dump_binary) {
+		dump_fp = fopen(dump_binary, "w");
+		if (!dump_fp) {
+			perror(dump_binary);
+			dump_binary = NULL;
+			return 1;
+		}
+		bin_ofp_buffer = malloc(128 * 1024);
+		if (setvbuf(dump_fp, bin_ofp_buffer, _IOFBF, 128 * 1024)) {
+			perror("setvbuf binary");
+			return 1;
+		}
+	}
+
+	if (pipeline)
+		ret = do_fifo();
+	else
+		ret = do_file();
+
+	if (!ret)
+		show_stats();
+
+	if (have_drv_data && !dump_binary)
+		printf("\ndiscarded traces containing low-level device driver "
+		       "specific data (only available in binary output)\n");
+
+	if (ofp_buffer) {
+		fflush(ofp);
+		free(ofp_buffer);
+	}
+	if (bin_ofp_buffer) {
+		fflush(dump_fp);
+		free(bin_ofp_buffer);
+	}
+	return ret;
 }
-#endif

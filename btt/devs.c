@@ -84,10 +84,8 @@ void __dip_exit(struct d_info *dip)
 	plat_free(dip->q2d_plat_handle);
 	plat_free(dip->q2c_plat_handle);
 	plat_free(dip->d2c_plat_handle);
-	p_live_free(dip->p_live_handle);
 	bno_dump_free(dip->bno_dump_handle);
 	unplug_hist_free(dip->up_hist_handle);
-	rstat_free(dip->rstat_handle);
 	if (output_all_data)
 		q2d_free(dip->q2d_priv);
 	if (dip->pit_fp)
@@ -105,15 +103,20 @@ void dip_exit(void)
 	}
 }
 
-static inline FILE *open_pit(struct d_info *dip)
+static inline char *mkhandle(char *str, __u32 device, char *post)
 {
-	FILE *fp;
-	char str[256];
+	int mjr = device >> MINORBITS;
+	int mnr = device & ((1 << MINORBITS) - 1);
 
-	if (output_name)
-		snprintf(str, 255, "%s_%s_pit.dat", output_name, dip->dip_name);
-	else snprintf(str, 255, "%s_pit.dat", dip->dip_name);
-	if ((fp = my_fopen(str, "w")) == NULL)
+	sprintf(str, "%03d,%03d%s", mjr, mnr, post);
+	return str;
+}
+
+static inline FILE *open_pit(char *str)
+{
+	FILE *fp = my_fopen(str, "w");
+
+	if (fp == NULL)
 		perror(str);
 
 	return fp;
@@ -124,39 +127,37 @@ struct d_info *dip_alloc(__u32 device, struct io *iop)
 	struct d_info *dip = __dip_find(device);
 
 	if (dip == NULL) {
+		char str[256];
+
 		dip = malloc(sizeof(struct d_info));
 		memset(dip, 0, sizeof(*dip));
-		dip->device = device;
-		dip->devmap = dev_map_find(device);
-		dip->last_q = (__u64)-1;
 		dip->heads = dip_rb_mkhds();
 		region_init(&dip->regions);
-		dip->start_time = BIT_TIME(iop->t.time);
-		dip->pre_culling = 1;
-
-		mkhandle(dip, dip->dip_name, 256);
-
+		dip->device = device;
+		dip->last_q = (__u64)-1;
+		dip->devmap = dev_map_find(device);
+		dip->bno_dump_handle = bno_dump_alloc(device);
+		dip->up_hist_handle = unplug_hist_alloc(device);
+		dip->seek_handle = seeki_alloc(mkhandle(str, device, "_d2d"));
+		dip->q2q_handle = seeki_alloc(mkhandle(str, device, "_q2q"));
+		dip->aqd_handle = aqd_alloc(mkhandle(str, device, "_aqd"));
+		dip->q2d_plat_handle =
+				plat_alloc(mkhandle(str, device, "_q2d_plat"));
+		dip->q2c_plat_handle =
+				plat_alloc(mkhandle(str, device, "_q2c_plat"));
+		dip->d2c_plat_handle =
+				plat_alloc(mkhandle(str, device, "_d2c_plat"));
 		latency_alloc(dip);
-		dip->aqd_handle = aqd_alloc(dip);
-		dip->bno_dump_handle = bno_dump_alloc(dip);
-		dip->up_hist_handle = unplug_hist_alloc(dip);
-		dip->seek_handle = seeki_alloc(dip, "_d2d");
-		dip->q2q_handle = seeki_alloc(dip, "_q2q");
-		dip->q2d_plat_handle = plat_alloc(dip, "_q2d");
-		dip->q2c_plat_handle = plat_alloc(dip, "_q2c");
-		dip->d2c_plat_handle = plat_alloc(dip, "_d2c");
-		dip->rstat_handle = rstat_alloc(dip);
-		dip->p_live_handle = p_live_alloc();
-
-		if (per_io_trees)
-			dip->pit_fp = open_pit(dip);
-
-		if (output_all_data)
-			dip->q2d_priv = q2d_alloc();
-
 		list_add_tail(&dip->hash_head, &dev_heads[DEV_HASH(device)]);
 		list_add_tail(&dip->all_head, &all_devs);
+		dip->start_time = BIT_TIME(iop->t.time);
+		dip->pre_culling = 1;
+		if (output_all_data)
+			dip->q2d_priv = q2d_alloc();
 		n_devs++;
+		if (per_io_trees)
+			dip->pit_fp = open_pit(mkhandle(per_io_trees,
+							  device, "_pit.dat"));
 	}
 
 	if (dip->pre_culling) {
