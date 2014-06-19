@@ -291,7 +291,6 @@ void q2d_acc(void *a1, void *a2);
 
 /* seek.c */
 void *seeki_alloc(char *str);
->>>>>>> android-4.4.3_r1
 void seeki_free(void *param);
 void seek_clean(void);
 void seeki_add(void *handle, struct io *iop);
