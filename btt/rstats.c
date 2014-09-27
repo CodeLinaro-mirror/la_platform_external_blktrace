@@ -21,7 +21,7 @@
  */
 #include "globals.h"
 
-unsigned int calc_freq;
+unsigned int window_sz = 0, step = 0;
 
 struct files {
 	FILE *fp;
@@ -33,7 +33,10 @@ struct rstat {
 	struct files files[6];
 	unsigned long long ios, nblks;
 	unsigned long long rios, wios, rblks, wblks;
-	double base_msec;
+	double base_msec[3];
+	long long unsigned int **tp_sliding_window;
+	long long unsigned int **ios_sliding_window;
+	long long unsigned int **zs_sliding_window;
 };
 
 static struct rstat *sys_info;
@@ -59,10 +62,7 @@ static int init_rsip(struct rstat *rsip, struct d_info *dip)
 	char *nm = dip ? dip->dip_name : "sys";
 	char fname[256];
 
-	if (calc_freq <= 0 || calc_freq > 1000)
-		calc_freq = 1000;
-
-	rsip->base_msec = -1;
+	rsip->base_msec[0] = rsip->base_msec[1] = rsip->base_msec[2] = -1;
 	rsip->ios = rsip->nblks = 0;
 	rsip->rios = rsip->wios = rsip->rblks = rsip->wblks = 0;
 
@@ -82,50 +82,116 @@ static int init_rsip(struct rstat *rsip, struct d_info *dip)
 	return 0;
 }
 
-static void rstat_emit(struct rstat *rsip, double cur)
+static void rstat_window_slide(struct rstat *rsip, unsigned int dir, double *mbps,
+			       long long unsigned int *iops,
+			       long long unsigned int cur_blk,
+			       unsigned int cur_ios, unsigned int num_zeros)
 {
-	double mbps, base_sec;
-	double resolution = MSEC_IN_SEC / (double)calc_freq;
+	unsigned int num_bins = (unsigned int)(window_sz / step) - 1;
+	unsigned int ios = 0, nblks = 0, i, zeros = 0;
+	double resolution = MSEC_IN_SEC / (double)step;
 
-	/* round base down to closest multiple of frequency */
-	base_sec = (unsigned int)(rsip->base_msec -
-		    ((unsigned int)rsip->base_msec % calc_freq)) / 1000.0;
+	if (!mbps || !iops)
+		return;
 
+	/* add up stats and slide window over */
+	for (i = 0; i < num_bins - 1; i++) {
+		nblks += rsip->tp_sliding_window[dir][i];
+		ios += rsip->ios_sliding_window[dir][i];
+		zeros += rsip->zs_sliding_window[dir][i];
+
+		rsip->tp_sliding_window[dir][i] = rsip->tp_sliding_window[dir][i + 1];
+		rsip->ios_sliding_window[dir][i] = rsip->ios_sliding_window[dir][i + 1];
+		rsip->zs_sliding_window[dir][i] = rsip->zs_sliding_window[dir][i+1];
+	}
+
+	nblks += rsip->tp_sliding_window[dir][num_bins - 1];
+	ios += rsip->ios_sliding_window[dir][num_bins - 1];
+	zeros += rsip->zs_sliding_window[dir][num_bins - 1];
+
+	rsip->tp_sliding_window[dir][num_bins - 1] = cur_blk;
+	rsip->ios_sliding_window[dir][num_bins - 1] = cur_ios;
+	rsip->zs_sliding_window[dir][num_bins - 1] = num_zeros;
+	nblks += cur_blk;
+	ios += cur_ios;
+	zeros += num_zeros;
+
+	/* finally calculate the window-average stats */
+	*mbps = (nblks * 512.0 * resolution) /
+		((num_bins + 1 + zeros) * 1024.0 * 1024.0);
+	*iops = (unsigned long long)((ios * resolution) /
+				     (num_bins + 1 + zeros));
+}
+
+static void rstat_emit(struct rstat *rsip, double cur, int rw)
+{
+	double mbps, base_sec[3];
+	int num_zeros, i;
+	long long unsigned int iops;
+	double delta, cur_sec;
+
+	/* round base down to closest multiple of step */
+	for (i = 0; i < 3; i++) {
+		base_sec[i] = (unsigned int)(rsip->base_msec[i] -
+					((unsigned int)rsip->base_msec[i] % step)) /
+								(double)MSEC_IN_SEC;
+	}
+	cur_sec = (unsigned int)(TO_MSEC(cur) -
+				((unsigned int)TO_MSEC(cur) % step)) /
+							(double)MSEC_IN_SEC;
+
+	delta = cur_sec - base_sec[0];
+	num_zeros = (int)((delta * (MSEC_IN_SEC / step)) - 1);
+	if (num_zeros < 0)
+		num_zeros = 0;
+
+	rstat_window_slide(rsip, 0, &mbps, &iops, (double)rsip->nblks,
+				   (double)rsip->ios, num_zeros);
 	/*
-	 * I/Os per second is easy: just the ios, normalized
+	 * Read/Write combined
 	 */
-	fprintf(rsip->files[0].fp, "%.3lf %llu\n", base_sec,
-		(unsigned long long)(rsip->ios * resolution));
-
-	/*
-	 * MB/s we convert blocks to mb...
-	 */
-	mbps = ((double)rsip->nblks * 512.0 * resolution) / (1024.0 * 1024.0);
-	fprintf(rsip->files[1].fp, "%.3lf %.2lf\n", base_sec, mbps);
+	fprintf(rsip->files[0].fp, "%.3lf %llu\n", base_sec[0], iops);
+	fprintf(rsip->files[1].fp, "%.3lf %.5lf\n", base_sec[0], mbps);
 
 	/* Read/Write specific IOPS and MBPS */
-	fprintf(rsip->files[2].fp, "%.3lf %llu\n", base_sec,
-		rsip->rios * (unsigned long long)resolution);
-	mbps = ((double)rsip->rblks * 512.0 * resolution) / (1024.0 * 1024.0);
-	fprintf(rsip->files[3].fp, "%.3lf %.2lf\n", base_sec, mbps);
+	if (rw) {
+		delta = cur_sec - base_sec[1];
+		num_zeros = (int)((delta * (MSEC_IN_SEC / step)) - 1);
+		if (num_zeros < 0)
+			num_zeros = 0;
 
-	fprintf(rsip->files[4].fp, "%.3lf %llu\n", base_sec,
-		rsip->wios * (unsigned long long)resolution);
-	mbps = ((double)rsip->wblks * 512.0 * resolution) / (1024.0 * 1024.0);
-	fprintf(rsip->files[5].fp, "%.3lf %.2lf\n", base_sec, mbps);
+		rstat_window_slide(rsip, 1, &mbps, &iops, (double)rsip->nblks,
+				   (double)rsip->ios, num_zeros);
 
-	rsip->base_msec = TO_MSEC(cur);
+		fprintf(rsip->files[2].fp, "%.3lf %llu\n", base_sec[1], iops);
+		fprintf(rsip->files[3].fp, "%.3lf %.2lf\n", base_sec[1], mbps);
+		rsip->rios = rsip->rblks = 0;
+		rsip->base_msec[1] = TO_MSEC(cur);
+
+	} else {
+		delta = cur_sec - base_sec[2];
+		num_zeros = (int)((delta * (MSEC_IN_SEC / step)) - 1);
+		if (num_zeros < 0)
+			num_zeros = 0;
+
+		rstat_window_slide(rsip, 2, &mbps, &iops, (double)rsip->nblks,
+				   (double)rsip->ios, num_zeros);
+		fprintf(rsip->files[4].fp, "%.3lf %llu\n", base_sec[2], iops);
+		fprintf(rsip->files[5].fp, "%.3lf %.2lf\n", base_sec[2], mbps);
+		rsip->wios = rsip->wblks = 0;
+		rsip->base_msec[2] = TO_MSEC(cur);
+	}
+
+	rsip->base_msec[0] = TO_MSEC(cur);
 	rsip->ios = rsip->nblks = 0;
-	rsip->rios = rsip->rblks = 0;
-	rsip->wios = rsip->wblks = 0;
 }
 
 static void __add(struct rstat *rsip, double cur, unsigned long long nblks, int rw)
 {
-	if (rsip->base_msec < 0)
-		rsip->base_msec = TO_MSEC(cur);
-	else if ((TO_MSEC(cur) - rsip->base_msec) >= (double)calc_freq)
-		rstat_emit(rsip, cur);
+	if (rsip->base_msec[0] < 0)
+		rsip->base_msec[0] = TO_MSEC(cur);
+	else if ((TO_MSEC(cur) - rsip->base_msec[0]) >= (double)step)
+		rstat_emit(rsip, cur, rw);
 
 	if (rw) {
 		rsip->rios++;
@@ -141,6 +207,53 @@ static void __add(struct rstat *rsip, double cur, unsigned long long nblks, int 
 void *rstat_alloc(struct d_info *dip)
 {
 	struct rstat *rsip = malloc(sizeof(*rsip));
+	unsigned int num_bins = (int)(window_sz / step) - 1;
+	int i;
+
+	if (!num_bins || num_bins > 1000) {
+		/* something went wrong with the params, set default values */
+		window_sz = 100;
+		step = 10;
+		num_bins = 9;
+	}
+
+	rsip->tp_sliding_window =
+		(long long unsigned int **)malloc(3 * sizeof(long long unsigned int *));
+	if (!rsip->tp_sliding_window)
+		return NULL;
+	for (i = 0; i < 3; i++) {
+		rsip->tp_sliding_window[i] =
+			(long long unsigned int *)malloc(num_bins * sizeof(long long unsigned int));
+		memset(rsip->tp_sliding_window[i], 0,
+		       num_bins * sizeof(long long unsigned int));
+	}
+
+	rsip->ios_sliding_window =
+		(long long unsigned int **)malloc(3 * sizeof(long long unsigned int *));
+	if (!rsip->ios_sliding_window) {
+		free(rsip->tp_sliding_window);
+		return NULL;
+	}
+	for (i = 0; i < 3; i++) {
+		rsip->ios_sliding_window[i] =
+		(long long unsigned int *)malloc(num_bins * sizeof(long long unsigned int));
+		memset(rsip->ios_sliding_window[i], 0,
+		       num_bins * sizeof(long long unsigned int));
+	}
+
+	rsip->zs_sliding_window =
+		(long long unsigned int **)malloc(3 * sizeof(long long unsigned int *));
+	if (!rsip->zs_sliding_window) {
+		free(rsip->tp_sliding_window);
+		free(rsip->ios_sliding_window);
+		return NULL;
+	}
+	for (i = 0; i < 3; i++) {
+		rsip->zs_sliding_window[i] =
+			(long long unsigned int *)malloc(num_bins * sizeof(long long unsigned int));
+		memset(rsip->zs_sliding_window[i], 0,
+		       num_bins * sizeof(long long unsigned int));
+	}
 
 	if (!init_rsip(rsip, dip))
 		return rsip;
@@ -153,8 +266,11 @@ void rstat_free(void *ptr)
 {
 	struct rstat *rsip = ptr;
 
-	rstat_emit(rsip, last_t_seen);
+	rstat_emit(rsip, last_t_seen, 1);
 	list_del(&rsip->head);
+	free(rsip->tp_sliding_window);
+	free(rsip->ios_sliding_window);
+	free(rsip->zs_sliding_window);
 	free(rsip);
 }
 

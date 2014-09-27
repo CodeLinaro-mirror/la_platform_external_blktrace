@@ -29,7 +29,7 @@
 
 #define SETBUFFER_SIZE	(64 * 1024)
 
-#define S_OPTS	"aAB:d:D:e:f:hi:H:I:l:L:m:M:o:p:P:q:Q:rs:S:t:T:u:VvXz:Z"
+#define S_OPTS	"aAB:d:D:e:hi:H:I:l:L:m:M:o:p:P:q:Q:rs:S:t:T:u:w:W:VvXz:Z"
 static struct option l_opts[] = {
 	{
 		.name = "seek-absolute",
@@ -68,10 +68,16 @@ static struct option l_opts[] = {
 		.val = 'e'
 	},
 	{
-		.name = "frequency",
+		.name = "step-size",
 		.has_arg = required_argument,
 		.flag = NULL,
-		.val = 'f'
+		.val = 'w'
+	},
+	{
+		.name = "window-size",
+		.has_arg = required_argument,
+		.flag = NULL,
+		.val = 'W'
 	},
 	{
 		.name = "help",
@@ -229,7 +235,6 @@ static char usage_str[] = \
 	"[ -d <seconds>     | --range-delta=<seconds> ]\n" \
 	"[ -D <dev;...>     | --devices=<dev;...> ]\n" \
 	"[ -e <exe,...>     | --exes=<exe,...>  ]\n" \
-	"[ -f <freq>        | --frequency=<frequency>  ]\n" \
 	"[ -h               | --help ]\n" \
 	"[ -H <output name> | --Histogram ]\n" \
 	"[ -i <input name>  | --input-file=<input name> ]\n" \
@@ -251,6 +256,8 @@ static char usage_str[] = \
 	"[ -u <output name> | --unplug-hist=<output name> ]\n" \
 	"[ -V               | --version ]\n" \
 	"[ -v               | --verbose ]\n" \
+	"[ -w <size>        | --step-size=<size>  ]\n" \
+	"[ -W <size>        | --window-size=<size>  ]\n" \
 	"[ -X               | --easy-parse-avgs ]\n" \
 	"[ -z <output name> | --q2d-latencies=<output name> ]\n" \
 	"[ -Z               | --do-active\n" \
@@ -325,9 +332,6 @@ void handle_args(int argc, char *argv[])
 		case 'e':
 			exes = optarg;
 			break;
-		case 'f':
-			sscanf(optarg, "%u", &calc_freq);
-			break;
 		case 'h':
 			usage(argv[0]);
 			exit(0);
@@ -398,6 +402,12 @@ void handle_args(int argc, char *argv[])
 		case 'V':
 			printf("%s version %s\n", argv[0], bt_timeline_version);
 			exit(0);
+		case 'w':
+			sscanf(optarg, "%u", &step);
+			break;
+		case 'W':
+			sscanf(optarg, "%u", &window_sz);
+			break;
 		case 'X':
 			easy_parse_avgs++;
 			break;
@@ -411,6 +421,11 @@ void handle_args(int argc, char *argv[])
 			usage(argv[0]);
 			exit(1);
 		}
+	}
+
+	if (window_sz == 0 || step == 0) {
+		window_sz = 100;
+		step = 10;
 	}
 
 	if (input_name == NULL) {

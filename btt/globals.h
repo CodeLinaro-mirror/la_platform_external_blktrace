@@ -215,7 +215,7 @@ extern __u64 q_histo[N_HIST_BKTS], d_histo[N_HIST_BKTS];
 extern __u32 r_latency_histo[N_READ_HIST_BINS], w_latency_histo[N_WRITE_HIST_BINS];
 extern __u64 lat_histos[NUM_LAT_TYPES][N_DIRECTIONS][N_LAT_HIST_BKTS];
 extern double cumulative_lat[NUM_LAT_TYPES][N_DIRECTIONS][N_LAT_HIST_BKTS];
-extern unsigned int calc_freq;
+extern unsigned int window_sz, step;
 
 /* args.c */
 void handle_args(int argc, char *argv[]);
