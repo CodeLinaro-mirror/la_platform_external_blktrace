@@ -70,6 +70,7 @@ extern struct timespec abs_start_time;
 
 #define CHECK_MAGIC(magic)		(((magic) & 0xffffff00) == BLK_IO_TRACE_MAGIC)
 #define SUPPORTED_VERSION	(0x07)
+#define SUPPORTED_VERSION2	(0x08)
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define be16_to_cpu(x)		__bswap_16(x)
@@ -99,7 +100,8 @@ static inline int verify_trace(__u32 magic)
 	}
 
 	version = magic & 0xff;
-	if (version != SUPPORTED_VERSION) {
+	if (version != SUPPORTED_VERSION &&
+	    version != SUPPORTED_VERSION2) {
 		fprintf(stderr, "unsupported trace version %x\n", version);
 		return 1;
 	}
