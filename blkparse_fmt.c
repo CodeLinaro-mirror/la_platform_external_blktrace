@@ -51,7 +51,7 @@ int add_format_spec(char *option)
 	return 0;
 }
 
-static inline void fill_rwbs(char *rwbs, struct blk_io_trace *t)
+static inline void fill_rwbs(char *rwbs, struct blk_io_trace2 *t)
 {
 	bool w = !!(t->action & BLK_TC_ACT(BLK_TC_WRITE));
 	bool a = !!(t->action & BLK_TC_ACT(BLK_TC_AHEAD));
@@ -146,16 +146,16 @@ static char *dump_pdu(unsigned char *pdu_buf, int pdu_len)
 	return p;
 }
 
-#define pdu_start(t)	(((void *) (t) + sizeof(struct blk_io_trace)))
+#define pdu_start(t)	(((void *) (t) + sizeof(struct blk_io_trace2)))
 
-static unsigned int get_pdu_int(struct blk_io_trace *t)
+static unsigned int get_pdu_int(struct blk_io_trace2 *t)
 {
 	__u64 *val = pdu_start(t);
 
 	return be64_to_cpu(*val);
 }
 
-static void get_pdu_remap(struct blk_io_trace *t, struct blk_io_trace_remap *r)
+static void get_pdu_remap(struct blk_io_trace2 *t, struct blk_io_trace_remap *r)
 {
 	struct blk_io_trace_remap *__r = pdu_start(t);
 	__u64 sector_from = __r->sector_from;
@@ -166,7 +166,7 @@ static void get_pdu_remap(struct blk_io_trace *t, struct blk_io_trace_remap *r)
 }
 
 static void print_field(char *act, struct per_cpu_info *pci,
-			struct blk_io_trace *t, unsigned long long elapsed,
+			struct blk_io_trace2 *t, unsigned long long elapsed,
 			int pdu_len, unsigned char *pdu_buf, char field,
 			int minus, int has_w, int width)
 {
@@ -275,7 +275,7 @@ static void print_field(char *act, struct per_cpu_info *pci,
 }
 
 static char *parse_field(char *act, struct per_cpu_info *pci,
-			 struct blk_io_trace *t, unsigned long long elapsed,
+			 struct blk_io_trace2 *t, unsigned long long elapsed,
 			 int pdu_len, unsigned char *pdu_buf,
 			 char *primary_format)
 {
@@ -302,7 +302,7 @@ static char *parse_field(char *act, struct per_cpu_info *pci,
 }
 
 static void process_default(char *act, struct per_cpu_info *pci,
-			    struct blk_io_trace *t, unsigned long long elapsed,
+			    struct blk_io_trace2 *t, unsigned long long elapsed,
 			    int pdu_len, unsigned char *pdu_buf)
 {
 	struct blk_io_trace_remap r = { .device_from = 0, };
@@ -436,7 +436,7 @@ static void process_default(char *act, struct per_cpu_info *pci,
 
 }
 
-void process_fmt(char *act, struct per_cpu_info *pci, struct blk_io_trace *t,
+void process_fmt(char *act, struct per_cpu_info *pci, struct blk_io_trace2 *t,
 		 unsigned long long elapsed, int pdu_len,
 		 unsigned char *pdu_buf)
 {

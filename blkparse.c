@@ -243,7 +243,7 @@ static struct option l_opts[] = {
  * for sorting the displayed output
  */
 struct trace {
-	struct blk_io_trace *bit;
+	struct blk_io_trace2 *bit;
 	struct rb_node rb_node;
 	struct trace *next;
 	unsigned long read_sequence;
@@ -257,7 +257,7 @@ static struct trace *trace_list;
 /*
  * allocation cache
  */
-static struct blk_io_trace *bit_alloc_list;
+static struct blk_io_trace2 *bit_alloc_list;
 static struct trace *t_alloc_list;
 
 /*
@@ -332,7 +332,7 @@ static int have_drv_data = 0;
 #define CPU_IDX(cpu)	((cpu) / CPUS_PER_LONG)
 #define CPU_BIT(cpu)	((cpu) & (CPUS_PER_LONG - 1))
 
-static void io_warn_unless(struct blk_io_trace *t, int condition,
+static void io_warn_unless(struct blk_io_trace2 *t, int condition,
 			   const char *fmt, ...)
 {
 	va_list ap;
@@ -613,7 +613,7 @@ static struct process_pid_map *add_ppm_hash(pid_t pid, const char *name)
 	return ppm;
 }
 
-static void handle_notify(struct blk_io_trace *bit)
+static void handle_notify(struct blk_io_trace2 *bit)
 {
 	void	*payload = (caddr_t) bit + sizeof(*bit);
 	__u32	two32[2];
@@ -802,25 +802,25 @@ static inline struct trace *t_alloc(void)
 	return malloc(sizeof(*t));
 }
 
-static inline void bit_free(struct blk_io_trace *bit)
+static inline void bit_free(struct blk_io_trace2 *bit)
 {
 	if (bit_alloc_cache < 1024 && !bit->pdu_len) {
 		/*
 		 * abuse a 64-bit field for a next pointer for the free item
 		 */
 		bit->time = (__u64) (unsigned long) bit_alloc_list;
-		bit_alloc_list = (struct blk_io_trace *) bit;
+		bit_alloc_list = (struct blk_io_trace2 *) bit;
 		bit_alloc_cache++;
 	} else
 		free(bit);
 }
 
-static inline struct blk_io_trace *bit_alloc(void)
+static inline struct blk_io_trace2 *bit_alloc(void)
 {
-	struct blk_io_trace *bit = bit_alloc_list;
+	struct blk_io_trace2 *bit = bit_alloc_list;
 
 	if (bit) {
-		bit_alloc_list = (struct blk_io_trace *) (unsigned long) \
+		bit_alloc_list = (struct blk_io_trace2 *) (unsigned long) \
 				 bit->time;
 		bit_alloc_cache--;
 		return bit;
@@ -1041,7 +1041,7 @@ static struct io_track *find_track(struct per_dev_info *pdi, pid_t pid,
 }
 
 static void log_track_frontmerge(struct per_dev_info *pdi,
-				 struct blk_io_trace *t)
+				 struct blk_io_trace2 *t)
 {
 	struct io_track *iot;
 
@@ -1062,7 +1062,7 @@ static void log_track_frontmerge(struct per_dev_info *pdi,
 	track_rb_insert(pdi, iot);
 }
 
-static void log_track_getrq(struct per_dev_info *pdi, struct blk_io_trace *t)
+static void log_track_getrq(struct per_dev_info *pdi, struct blk_io_trace2 *t)
 {
 	struct io_track *iot;
 	struct io_track_req *req;
@@ -1081,7 +1081,7 @@ static void log_track_getrq(struct per_dev_info *pdi, struct blk_io_trace *t)
  * for md/dm setups, the interesting cycle is Q -> C. So track queueing
  * time here, as dispatch time
  */
-static void log_track_queue(struct per_dev_info *pdi, struct blk_io_trace *t)
+static void log_track_queue(struct per_dev_info *pdi, struct blk_io_trace2 *t)
 {
 	struct io_track *iot;
 	struct io_track_req *req;
@@ -1096,7 +1096,7 @@ static void log_track_queue(struct per_dev_info *pdi, struct blk_io_trace *t)
 	req->dispatch_time = t->time;
 }
 
-static void log_track_split(struct per_dev_info *pdi, struct blk_io_trace *t)
+static void log_track_split(struct per_dev_info *pdi, struct blk_io_trace2 *t)
 {
 	struct io_track *iot, *split;
 
@@ -1118,7 +1118,7 @@ static void log_track_split(struct per_dev_info *pdi, struct blk_io_trace *t)
  * return time between rq allocation and insertion
  */
 static unsigned long long log_track_insert(struct per_dev_info *pdi,
-					   struct blk_io_trace *t)
+					   struct blk_io_trace2 *t)
 {
 	unsigned long long elapsed;
 	struct io_track *iot;
@@ -1153,7 +1153,7 @@ static unsigned long long log_track_insert(struct per_dev_info *pdi,
  * return time between queue and issue
  */
 static unsigned long long log_track_issue(struct per_dev_info *pdi,
-					  struct blk_io_trace *t)
+					  struct blk_io_trace2 *t)
 {
 	unsigned long long elapsed = -1ULL;
 	struct io_track *iot;
@@ -1191,7 +1191,7 @@ static unsigned long long log_track_issue(struct per_dev_info *pdi,
 	return elapsed;
 }
 
-static void fixup_complete(struct per_dev_info *pdi, struct blk_io_trace *t)
+static void fixup_complete(struct per_dev_info *pdi, struct blk_io_trace2 *t)
 {
 	struct io_track *iot;
 	__u64 start_sector;
@@ -1214,7 +1214,7 @@ static void fixup_complete(struct per_dev_info *pdi, struct blk_io_trace *t)
  * return time between dispatch and complete
  */
 static unsigned long long log_track_complete(struct per_dev_info *pdi,
-					     struct blk_io_trace *t)
+					     struct blk_io_trace2 *t)
 {
 	unsigned long long elapsed = -1ULL;
 	struct io_track *iot, *next;
@@ -1288,7 +1288,7 @@ static char *get_dev_name(struct per_dev_info *pdi, char *buffer, int size)
 	return buffer;
 }
 
-static void check_time(struct per_dev_info *pdi, struct blk_io_trace *bit)
+static void check_time(struct per_dev_info *pdi, struct blk_io_trace2 *bit)
 {
 	unsigned long long this = bit->time;
 	unsigned long long last = pdi->last_reported_time;
@@ -1297,7 +1297,7 @@ static void check_time(struct per_dev_info *pdi, struct blk_io_trace *bit)
 	pdi->last_reported_time = this;
 }
 
-static inline void __account_m(struct io_stats *ios, struct blk_io_trace *t,
+static inline void __account_m(struct io_stats *ios, struct blk_io_trace2 *t,
 			       int rw)
 {
 	if (rw) {
@@ -1311,7 +1311,7 @@ static inline void __account_m(struct io_stats *ios, struct blk_io_trace *t,
 	}
 }
 
-static inline void account_m(struct blk_io_trace *t, struct per_cpu_info *pci,
+static inline void account_m(struct blk_io_trace2 *t, struct per_cpu_info *pci,
 			     int rw)
 {
 	__account_m(&pci->io_stats, t, rw);
@@ -1324,7 +1324,7 @@ static inline void account_m(struct blk_io_trace *t, struct per_cpu_info *pci,
 }
 
 static inline void __account_pc_queue(struct io_stats *ios,
-				      struct blk_io_trace *t, int rw)
+				      struct blk_io_trace2 *t, int rw)
 {
 	if (rw) {
 		ios->qwrites_pc++;
@@ -1337,7 +1337,7 @@ static inline void __account_pc_queue(struct io_stats *ios,
 	}
 }
 
-static inline void account_pc_queue(struct blk_io_trace *t,
+static inline void account_pc_queue(struct blk_io_trace2 *t,
 				    struct per_cpu_info *pci, int rw)
 {
 	__account_pc_queue(&pci->io_stats, t, rw);
@@ -1363,7 +1363,7 @@ static inline void __account_pc_issue(struct io_stats *ios, int rw,
 	}
 }
 
-static inline void account_pc_issue(struct blk_io_trace *t,
+static inline void account_pc_issue(struct blk_io_trace2 *t,
 				    struct per_cpu_info *pci, int rw)
 {
 	__account_pc_issue(&pci->io_stats, rw, t->bytes);
@@ -1376,7 +1376,7 @@ static inline void account_pc_issue(struct blk_io_trace *t,
 }
 
 static inline void __account_pc_requeue(struct io_stats *ios,
-					struct blk_io_trace *t, int rw)
+					struct blk_io_trace2 *t, int rw)
 {
 	if (rw) {
 		ios->wrqueue_pc++;
@@ -1389,7 +1389,7 @@ static inline void __account_pc_requeue(struct io_stats *ios,
 	}
 }
 
-static inline void account_pc_requeue(struct blk_io_trace *t,
+static inline void account_pc_requeue(struct blk_io_trace2 *t,
 				      struct per_cpu_info *pci, int rw)
 {
 	__account_pc_requeue(&pci->io_stats, t, rw);
@@ -1409,7 +1409,7 @@ static inline void __account_pc_c(struct io_stats *ios, int rw)
 		ios->creads_pc++;
 }
 
-static inline void account_pc_c(struct blk_io_trace *t,
+static inline void account_pc_c(struct blk_io_trace2 *t,
 				struct per_cpu_info *pci, int rw)
 {
 	__account_pc_c(&pci->io_stats, rw);
@@ -1421,7 +1421,7 @@ static inline void account_pc_c(struct blk_io_trace *t,
 	}
 }
 
-static inline void __account_queue(struct io_stats *ios, struct blk_io_trace *t,
+static inline void __account_queue(struct io_stats *ios, struct blk_io_trace2 *t,
 				   int rw)
 {
 	if (rw) {
@@ -1435,7 +1435,7 @@ static inline void __account_queue(struct io_stats *ios, struct blk_io_trace *t,
 	}
 }
 
-static inline void account_queue(struct blk_io_trace *t,
+static inline void account_queue(struct blk_io_trace2 *t,
 				 struct per_cpu_info *pci, int rw)
 {
 	__account_queue(&pci->io_stats, t, rw);
@@ -1460,7 +1460,7 @@ static inline void __account_c(struct io_stats *ios, int rw, int bytes)
 	}
 }
 
-static inline void account_c(struct blk_io_trace *t, struct per_cpu_info *pci,
+static inline void account_c(struct blk_io_trace2 *t, struct per_cpu_info *pci,
 			     int rw, int bytes)
 {
 	__account_c(&pci->io_stats, rw, bytes);
@@ -1486,7 +1486,7 @@ static inline void __account_issue(struct io_stats *ios, int rw,
 	}
 }
 
-static inline void account_issue(struct blk_io_trace *t,
+static inline void account_issue(struct blk_io_trace2 *t,
 				 struct per_cpu_info *pci, int rw)
 {
 	__account_issue(&pci->io_stats, rw, t->bytes);
@@ -1506,7 +1506,7 @@ static inline void __account_unplug(struct io_stats *ios, int timer)
 		ios->io_unplugs++;
 }
 
-static inline void account_unplug(struct blk_io_trace *t,
+static inline void account_unplug(struct blk_io_trace2 *t,
 				  struct per_cpu_info *pci, int timer)
 {
 	__account_unplug(&pci->io_stats, timer);
@@ -1519,7 +1519,7 @@ static inline void account_unplug(struct blk_io_trace *t,
 }
 
 static inline void __account_requeue(struct io_stats *ios,
-				     struct blk_io_trace *t, int rw)
+				     struct blk_io_trace2 *t, int rw)
 {
 	if (rw) {
 		ios->wrqueue++;
@@ -1532,7 +1532,7 @@ static inline void __account_requeue(struct io_stats *ios,
 	}
 }
 
-static inline void account_requeue(struct blk_io_trace *t,
+static inline void account_requeue(struct blk_io_trace2 *t,
 				   struct per_cpu_info *pci, int rw)
 {
 	__account_requeue(&pci->io_stats, t, rw);
@@ -1545,31 +1545,31 @@ static inline void account_requeue(struct blk_io_trace *t,
 }
 
 static void log_complete(struct per_dev_info *pdi, struct per_cpu_info *pci,
-			 struct blk_io_trace *t, char *act)
+			 struct blk_io_trace2 *t, char *act)
 {
 	process_fmt(act, pci, t, log_track_complete(pdi, t), 0, NULL);
 }
 
 static void log_insert(struct per_dev_info *pdi, struct per_cpu_info *pci,
-		       struct blk_io_trace *t, char *act)
+		       struct blk_io_trace2 *t, char *act)
 {
 	process_fmt(act, pci, t, log_track_insert(pdi, t), 0, NULL);
 }
 
-static void log_queue(struct per_cpu_info *pci, struct blk_io_trace *t,
+static void log_queue(struct per_cpu_info *pci, struct blk_io_trace2 *t,
 		      char *act)
 {
 	process_fmt(act, pci, t, -1, 0, NULL);
 }
 
 static void log_issue(struct per_dev_info *pdi, struct per_cpu_info *pci,
-		      struct blk_io_trace *t, char *act)
+		      struct blk_io_trace2 *t, char *act)
 {
 	process_fmt(act, pci, t, log_track_issue(pdi, t), 0, NULL);
 }
 
 static void log_merge(struct per_dev_info *pdi, struct per_cpu_info *pci,
-		      struct blk_io_trace *t, char *act)
+		      struct blk_io_trace2 *t, char *act)
 {
 	if (act[0] == 'F')
 		log_track_frontmerge(pdi, t);
@@ -1577,38 +1577,38 @@ static void log_merge(struct per_dev_info *pdi, struct per_cpu_info *pci,
 	process_fmt(act, pci, t, -1ULL, 0, NULL);
 }
 
-static void log_action(struct per_cpu_info *pci, struct blk_io_trace *t,
+static void log_action(struct per_cpu_info *pci, struct blk_io_trace2 *t,
 			char *act)
 {
 	process_fmt(act, pci, t, -1ULL, 0, NULL);
 }
 
-static void log_generic(struct per_cpu_info *pci, struct blk_io_trace *t,
+static void log_generic(struct per_cpu_info *pci, struct blk_io_trace2 *t,
 			char *act)
 {
 	process_fmt(act, pci, t, -1ULL, 0, NULL);
 }
 
-static void log_unplug(struct per_cpu_info *pci, struct blk_io_trace *t,
+static void log_unplug(struct per_cpu_info *pci, struct blk_io_trace2 *t,
 		      char *act)
 {
 	process_fmt(act, pci, t, -1ULL, 0, NULL);
 }
 
-static void log_split(struct per_cpu_info *pci, struct blk_io_trace *t,
+static void log_split(struct per_cpu_info *pci, struct blk_io_trace2 *t,
 		      char *act)
 {
 	process_fmt(act, pci, t, -1ULL, 0, NULL);
 }
 
-static void log_pc(struct per_cpu_info *pci, struct blk_io_trace *t, char *act)
+static void log_pc(struct per_cpu_info *pci, struct blk_io_trace2 *t, char *act)
 {
 	unsigned char *buf = (unsigned char *) t + sizeof(*t);
 
 	process_fmt(act, pci, t, -1ULL, t->pdu_len, buf);
 }
 
-static void dump_trace_pc(struct blk_io_trace *t, struct per_dev_info *pdi,
+static void dump_trace_pc(struct blk_io_trace2 *t, struct per_dev_info *pdi,
 			  struct per_cpu_info *pci)
 {
 	int w = (t->action & BLK_TC_ACT(BLK_TC_WRITE)) != 0;
@@ -1657,7 +1657,7 @@ static void dump_trace_pc(struct blk_io_trace *t, struct per_dev_info *pdi,
 	}
 }
 
-static void dump_trace_fs(struct blk_io_trace *t, struct per_dev_info *pdi,
+static void dump_trace_fs(struct blk_io_trace2 *t, struct per_dev_info *pdi,
 			  struct per_cpu_info *pci)
 {
 	int w = (t->action & BLK_TC_ACT(BLK_TC_WRITE)) != 0;
@@ -1737,12 +1737,12 @@ static void dump_trace_fs(struct blk_io_trace *t, struct per_dev_info *pdi,
 			/* dump to binary file only */
 			break;
 		default:
-			fprintf(stderr, "Bad fs action %x\n", t->action);
+			fprintf(stderr, "Bad fs action %llx\n", t->action);
 			break;
 	}
 }
 
-static void dump_trace(struct blk_io_trace *t, struct per_cpu_info *pci,
+static void dump_trace(struct blk_io_trace2 *t, struct per_cpu_info *pci,
 		       struct per_dev_info *pdi)
 {
 	if (text_output) {
@@ -2162,7 +2162,7 @@ static void find_genesis(void)
 	}
 }
 
-static inline int check_stopwatch(struct blk_io_trace *bit)
+static inline int check_stopwatch(struct blk_io_trace2 *bit)
 {
 	if (bit->time < stopwatch_end &&
 	    bit->time >= stopwatch_start)
@@ -2185,7 +2185,7 @@ static int sort_entries(unsigned long long *youngest)
 
 	*youngest = 0;
 	while ((t = trace_list) != NULL) {
-		struct blk_io_trace *bit = t->bit;
+		struct blk_io_trace2 *bit = t->bit;
 
 		trace_list = t->next;
 
@@ -2264,7 +2264,7 @@ static int check_cpu_map(struct per_dev_info *pdi)
 
 static int check_sequence(struct per_dev_info *pdi, struct trace *t, int force)
 {
-	struct blk_io_trace *bit = t->bit;
+	struct blk_io_trace2 *bit = t->bit;
 	unsigned long expected_sequence;
 	struct per_cpu_info *pci;
 	struct trace *__t;
@@ -2315,7 +2315,7 @@ static void show_entries_rb(int force)
 {
 	struct per_dev_info *pdi = NULL;
 	struct per_cpu_info *pci = NULL;
-	struct blk_io_trace *bit;
+	struct blk_io_trace2 *bit;
 	struct rb_node *n;
 	struct trace *t;
 
@@ -2428,12 +2428,22 @@ static inline __u32 get_magic(__u32 magic)
 	return __bswap_32(magic);
 }
 
-static int read_one_bit(int fd, struct blk_io_trace *bit, int block,
+static int read_one_bit(int fd, struct blk_io_trace2 **bit2, int block,
 			int *fdblock)
 {
+	struct blk_io_trace2 *new = *bit2;
+	struct blk_io_trace *bit;
 	int ret;
 	int pdu_len;
-	void *p = (void *) ((u8 *)bit + sizeof(__u32));
+	void *p;
+
+	bit = malloc(sizeof(*bit));
+	if (!bit)
+		return -1;
+
+	bit->magic = new->magic;
+
+	p = (void *) ((u8 *)bit + sizeof(__u32));
 
 	ret = read_data(fd, p, sizeof(*bit) - sizeof(__u32), block, fdblock);
 	if (ret)
@@ -2449,9 +2459,14 @@ static int read_one_bit(int fd, struct blk_io_trace *bit, int block,
 			return ret;
 		}
 		bit = ptr;
+
+		new = realloc(*bit2, sizeof(struct blk_io_trace2) + pdu_len);
 	}
 
 	bit_trace_to_cpu(bit);
+	bit_to_bit2(bit, new);
+	free(bit);
+	*bit2 = new;
 
 	return 0;
 }
@@ -2491,11 +2506,11 @@ static int read_events(int fd, int always_block, int *fdblock)
 		}
 		version = magic & 0xff;
 		if (version == SUPPORTED_VERSION) {
-			struct blk_io_trace *bit;
+			struct blk_io_trace2 *bit;
 			bit = bit_alloc();
 			bit->magic = magic;
 
-			ret = read_one_bit(fd, bit, 1, fdblock);
+			ret = read_one_bit(fd, &bit, 1, fdblock);
 			if (ret)
 				break;
 
@@ -2620,7 +2635,7 @@ static int ms_prime(struct ms_stream *msp)
 	struct trace *t;
 	struct per_dev_info *pdi = msp->pdi;
 	struct per_cpu_info *pci = get_cpu_info(pdi, msp->cpu);
-	struct blk_io_trace *bit = NULL;
+	struct blk_io_trace2 *bit = NULL;
 	int ret, ndone = 0;
 
 	for (i = 0; !is_done() && pci->fd >= 0 && i < rb_batch; i++) {
@@ -2645,7 +2660,7 @@ static int ms_prime(struct ms_stream *msp)
 			bit = bit_alloc();
 			bit->magic = magic;
 
-			ret = read_one_bit(pci->fd, bit, 1, &pci->fdblock);
+			ret = read_one_bit(pci->fd, &bit, 1, &pci->fdblock);
 			if (ret)
 				goto err;
 
@@ -2767,7 +2782,7 @@ static int handle(struct ms_stream *msp)
 	struct trace *t;
 	struct per_dev_info *pdi;
 	struct per_cpu_info *pci;
-	struct blk_io_trace *bit;
+	struct blk_io_trace2 *bit;
 
 	t = ms_peek(msp);
 

@@ -6,6 +6,7 @@
 #include <byteswap.h>
 #include <endian.h>
 #include <sys/types.h>
+#include <string.h>
 
 #include "blktrace_api.h"
 #include "rbtree.h"
@@ -106,6 +107,26 @@ static inline int verify_trace(__u32 magic)
 	return 0;
 }
 
+static inline void bit_to_bit2(struct blk_io_trace *old,
+			       struct blk_io_trace2 *new)
+{
+	new->magic	= old->magic;
+	new->sequence	= old->sequence;
+	new->time	= old->time;
+	new->sector	= old->sector;
+	new->bytes	= old->bytes;
+	new->action	= 0 | old->action;
+	new->pid	= old->pid;
+	new->device	= old->device;
+	new->cpu	= old->cpu;
+	new->error	= old->error;
+	new->pdu_len	= old->pdu_len;
+
+	if (new->pdu_len)
+		memcpy(((u8 *) new + sizeof(*new)), ((u8 *)old + sizeof(*old)),
+		       old->pdu_len);
+}
+
 static inline void bit_trace_to_cpu(struct blk_io_trace *t)
 {
 	if (data_is_native)
@@ -145,7 +166,7 @@ static inline int check_data_endianness(u32 magic)
 
 extern void set_all_format_specs(char *);
 extern int add_format_spec(char *);
-extern void process_fmt(char *, struct per_cpu_info *, struct blk_io_trace *,
+extern void process_fmt(char *, struct per_cpu_info *, struct blk_io_trace2 *,
 			unsigned long long, int, unsigned char *);
 extern unsigned long long valid_act_opt(unsigned long long);
 extern int find_mask_map(char *);
