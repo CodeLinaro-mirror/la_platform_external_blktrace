@@ -14,7 +14,7 @@ Requirements
 blktrace was integrated into the mainline kernel between 2.6.16 and 2.6.17-rc1.
 The target trace needs to run on a kernel at least that new.
 
-git://git.kernel.dk/blktrace.git
+git://git.kernel.org/pub/scm/linux/kernel/git/axboe/blktrace.git
 
 If you don't have git, you can get hourly snapshots from:
 
@@ -24,12 +24,12 @@ The snapshots include the full git object database as well. kernel.org has
 excessively long mirror times, so if you have git installed, you can pull
 the master tree from:
 
-git://git.kernel.dk/blktrace.git
+git://git.kernel.org/pub/scm/linux/kernel/git/axboe/blktrace.git
 
 For browsing the repo over http and viewing history etc, you can direct
 your browser to:
 
-http://git.kernel.dk/
+https://git.kernel.org/pub/scm/linux/kernel/git/axboe/blktrace.git
 
 A blktrace visualization tool, iowatcher, was added to blktrace in version
 1.1.0. It requires librsvg and either png2theora or ffmpeg to generate movies.
