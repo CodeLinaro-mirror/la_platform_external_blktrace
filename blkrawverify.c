@@ -102,7 +102,7 @@ static char *act_to_str(__u64 action)
 	return buf;
 }
 
-static void dump_trace(FILE *ofp, char *prefix, struct blk_io_trace *bit)
+static void dump_trace(FILE *ofp, char *prefix, struct blk_io_trace2 *bit)
 {
 	fprintf(ofp, "    Dump %s\n", prefix);
 	fprintf(ofp, "        %8s: %08x\n", "magic", bit->magic);
@@ -123,13 +123,13 @@ static int process(FILE **fp, char *devname, char *file, unsigned int cpu)
 {
 #	define SWAP_BITS() do {						\
 		if (bit_save) {						\
-			struct blk_io_trace *tmp = bit_save;		\
+			struct blk_io_trace2 *tmp = bit_save;		\
 			bit_save = bit;					\
 			bit = tmp;					\
 		}							\
 		else {							\
 			bit_save = bit;					\
-			bit = malloc(sizeof(struct blk_io_trace));	\
+			bit = malloc(sizeof(struct blk_io_trace2));	\
 		}							\
 	} while (0)
 
@@ -145,8 +145,9 @@ static int process(FILE **fp, char *devname, char *file, unsigned int cpu)
 	FILE *ifp, *ofp;
 	__u32 save_device = 0, save_sequence = 0;
 	__u64 save_time = 0;
-	struct blk_io_trace *bit_save = NULL;
-	struct blk_io_trace *bit = malloc(sizeof(struct blk_io_trace));
+	struct blk_io_trace bit1;
+	struct blk_io_trace2 *bit_save = NULL;
+	struct blk_io_trace2 *bit = malloc(sizeof(struct blk_io_trace2));
 	unsigned int ngood = 0;
 	unsigned int nbad = 0;
 	unsigned int nbad_trace = 0, nbad_pdu = 0, nbad_cpu = 0;
@@ -172,16 +173,28 @@ static int process(FILE **fp, char *devname, char *file, unsigned int cpu)
 	}
 
 	ofp = *fp;
-	while ((n = fread(bit, sizeof(struct blk_io_trace), 1, ifp)) == 1) {
+	while ((n = fread(&bit1, sizeof(struct blk_io_trace), 1, ifp)) == 1) {
 		if (ferror(ifp)) {
 			clearerr(ifp);
 			perror("fread");
 			break;
 		}
 		if (data_is_native == -1)
-			check_data_endianness(bit->magic);
+			check_data_endianness(bit1.magic);
 
-		bit_trace_to_cpu(bit);
+		bit_trace_to_cpu(&bit1);
+
+		bit->magic	= bit1.magic;
+		bit->sequence	= bit1.sequence;
+		bit->time	= bit1.time;
+		bit->sector	= bit1.sector;
+		bit->bytes	= bit1.bytes;
+		bit->action	= bit1.action;
+		bit->pid	= bit1.pid;
+		bit->device	= bit1.device;
+		bit->cpu	= bit1.cpu;
+		bit->error	= bit1.error;
+		bit->pdu_len	= bit1.pdu_len;
 
 		if (!CHECK_MAGIC(bit->magic)) {
 			INC_BAD("bad trace");
