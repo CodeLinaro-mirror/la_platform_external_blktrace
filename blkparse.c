@@ -119,6 +119,10 @@ static struct per_process_info *ppi_hash_table[PPI_HASH_SIZE];
 static struct per_process_info *ppi_list;
 static int ppi_list_entries;
 
+enum {
+	OPT_TRACE_VERSION = 256,
+};
+
 static struct option l_opts[] = {
  	{
 		.name = "act-mask",
@@ -235,6 +239,12 @@ static struct option l_opts[] = {
 		.val = 'V'
 	},
 	{
+		.name = "trace-version",
+		.has_arg = required_argument,
+		.flag = NULL,
+		.val = OPT_TRACE_VERSION
+	},
+	{
 		.name = NULL,
 	}
 };
@@ -306,6 +316,7 @@ int data_is_native = -1;
 
 static FILE *dump_fp;
 static char *dump_binary;
+static int dump_trace_version = 2;
 
 static unsigned int t_alloc_cache;
 static unsigned int bit_alloc_cache;
@@ -349,14 +360,40 @@ static void io_warn_unless(struct blk_io_trace2 *t, int condition,
 
 static void output_binary(void *buf, int len)
 {
-	if (dump_binary) {
-		size_t n = fwrite(buf, len, 1, dump_fp);
-		if (n != 1) {
-			perror(dump_binary);
-			fclose(dump_fp);
-			dump_binary = NULL;
+	if (!dump_binary)
+		return;
+
+	/*
+	 * The traces are kept as 'struct blk_io_trace2' internally. When a
+	 * version 1 dump is requested, convert them back into the legacy
+	 * 'struct blk_io_trace' before writing them out.
+	 */
+	if (dump_trace_version == 1) {
+		struct blk_io_trace2 *bit2 = buf;
+		struct blk_io_trace *bit;
+
+		len = sizeof(*bit) + bit2->pdu_len;
+		bit = malloc(len);
+		if (!bit)
+			goto err;
+
+		bit2_to_bit(bit2, bit);
+
+		if (fwrite(bit, len, 1, dump_fp) != 1) {
+			free(bit);
+			goto err;
 		}
+		free(bit);
+		return;
 	}
+
+	if (fwrite(buf, len, 1, dump_fp) != 1)
+		goto err;
+	return;
+err:
+	perror(dump_binary);
+	fclose(dump_fp);
+	dump_binary = NULL;
 }
 
 static void resize_cpu_info(struct per_dev_info *pdi, int cpu)
@@ -3175,7 +3212,8 @@ static char usage_str[] =    "\n\n" \
 	"[ -w <time>         | --stopwatch=<time> ]\n" \
 	"[ -M                | --no-msgs\n" \
 	"[ -v                | --verbose ]\n" \
-	"[ -V                | --version ]\n\n" \
+	"[ -V                | --version ]\n" \
+	"[ --trace-version=<1|2> ]\n\n" \
 	"\t-a Only trace specified actions. See documentation\n" \
 	"\t-A Give trace mask as a single value. See documentation\n" \
 	"\t-b stdin read batching\n" \
@@ -3201,7 +3239,8 @@ static char usage_str[] =    "\n\n" \
 	"\t   If 'start' isn't given, blkparse defaults the start time to 0\n" \
 	"\t-M Do not output messages to binary file\n" \
 	"\t-v More verbose for marginal errors\n" \
-	"\t-V Print program version info\n\n";
+	"\t-V Print program version info\n" \
+	"\t--trace-version Emit a version 1 or 2 (default) binary trace\n\n";
 
 static void usage(char *prog)
 {
@@ -3297,6 +3336,15 @@ int main(int argc, char *argv[])
 			break;
 		case 'M':
 			bin_output_msgs = 0;
+			break;
+		case OPT_TRACE_VERSION:
+			dump_trace_version = atoi(optarg);
+
+			if (dump_trace_version != 1 &&
+			    dump_trace_version != 2) {
+				usage(argv[0]);
+				return 1;
+			}
 			break;
 		default:
 			usage(argv[0]);

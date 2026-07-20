@@ -129,6 +129,26 @@ static inline void bit_to_bit2(struct blk_io_trace *old,
 		       old->pdu_len);
 }
 
+static inline void bit2_to_bit(struct blk_io_trace2 *new,
+			       struct blk_io_trace *old)
+{
+	old->magic	= BLK_IO_TRACE_MAGIC | BLK_IO_TRACE_VERSION;
+	old->sequence	= new->sequence;
+	old->time	= new->time;
+	old->sector	= new->sector;
+	old->bytes	= new->bytes;
+	old->action	= new->action;
+	old->pid	= new->pid;
+	old->device	= new->device;
+	old->cpu	= new->cpu;
+	old->error	= new->error;
+	old->pdu_len	= new->pdu_len;
+
+	if (old->pdu_len)
+		memcpy(((u8 *) old + sizeof(*old)), ((u8 *)new + sizeof(*new)),
+		       new->pdu_len);
+}
+
 static inline void bit2_trace_to_cpu(struct blk_io_trace2 *t)
 {
 	if (data_is_native)

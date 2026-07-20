@@ -151,6 +151,13 @@ Do \fInot\fR produce text output, used for binary (\fB\-d\fR) only
 Binary output file
 .RE
 
+\-\-trace\-version=\fI1|2\fR
+.RS
+Selects the trace protocol version of the binary output file (\fB\-d\fR).
+Version 1 emits the legacy \fBstruct blk_io_trace\fR, while version 2 (the
+default) emits \fBstruct blk_io_trace2\fR.
+.RE
+
 \-q
 .br
 \-\-quiet
