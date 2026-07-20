@@ -47,15 +47,25 @@ static inline size_t min_len(size_t a, size_t b)
 }
 
 static inline size_t convert_to_cpu(struct blk_io_trace *t,
-                                    struct blk_io_trace *tp,
+                                    struct blk_io_trace2 *tp,
 				    void **pdu)
 {
 	if (data_is_native == -1)
 		check_data_endianness(t->magic);
 
-	if (data_is_native)
-		memcpy(tp, t, sizeof(*tp));
-	else {
+	if (data_is_native) {
+		tp->magic	= t->magic;
+		tp->sequence	= t->sequence;
+		tp->time	= t->time;
+		tp->sector	= t->sector;
+		tp->bytes	= t->bytes;
+		tp->action	= t->action;
+		tp->pid		= t->pid;
+		tp->device	= t->device;
+		tp->cpu		= t->cpu;
+		tp->error	= t->error;
+		tp->pdu_len	= t->pdu_len;
+	} else {
 		tp->magic	= be32_to_cpu(t->magic);
 		tp->sequence	= be32_to_cpu(t->sequence);
 		tp->time	= be64_to_cpu(t->time);
@@ -75,7 +85,7 @@ static inline size_t convert_to_cpu(struct blk_io_trace *t,
 	} else
 		*pdu = NULL;
 
-	return sizeof(*tp) + tp->pdu_len;
+	return sizeof(*t) + tp->pdu_len;
 }
 
 static int move_map(void)
@@ -127,7 +137,7 @@ void cleanup_ifile(void)
 	close(fd);
 }
 
-int next_trace(struct blk_io_trace *t, void **pdu)
+int next_trace(struct blk_io_trace2 *t, void **pdu)
 {
 	size_t this_len;
 

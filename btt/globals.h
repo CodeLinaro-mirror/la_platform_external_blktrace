@@ -158,7 +158,7 @@ struct io {
 	__u64 s_time;
 	__u32 d_nsec, c_nsec;
 
-	struct blk_io_trace t;
+	struct blk_io_trace2 t;
 
 	int linked;
 	enum iop_type type;
@@ -260,7 +260,7 @@ void clean_allocs(void);
 /* mmap.c */
 void setup_ifile(char *fname);
 void cleanup_ifile(void);
-int next_trace(struct blk_io_trace *t, void **pdu);
+int next_trace(struct blk_io_trace2 *t, void **pdu);
 double pct_done(void);
 
 /* output.c */
