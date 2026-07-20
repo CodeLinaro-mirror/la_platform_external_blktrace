@@ -119,6 +119,52 @@ static void dump_trace(FILE *ofp, char *prefix, struct blk_io_trace2 *bit)
 						           MINOR(bit->device));
 }
 
+static int read_trace(FILE *ifp, struct blk_io_trace2 *bit)
+{
+	struct blk_io_trace bit1;
+	struct blk_io_trace2 bit2;
+	__u32 magic;
+	int version;
+	void *p;
+
+	if (fread(&magic, sizeof(magic), 1, ifp) != 1)
+		return 0;
+
+	if (data_is_native == -1)
+		check_data_endianness(magic);
+
+	version = (data_is_native ? magic : be32_to_cpu(magic)) & 0xff;
+
+	if (version == SUPPORTED_VERSION2) {
+		bit2.magic = magic;
+		p = (void *) ((u8 *)&bit2 + sizeof(__u32));
+		if (fread(p, sizeof(bit2) - sizeof(__u32), 1, ifp) != 1)
+			return 0;
+		bit2_trace_to_cpu(&bit2);
+		*bit = bit2;
+	} else {
+		bit1.magic = magic;
+		p = (void *) ((u8 *)&bit1 + sizeof(__u32));
+		if (fread(p, sizeof(bit1) - sizeof(__u32), 1, ifp) != 1)
+			return 0;
+		bit_trace_to_cpu(&bit1);
+
+		bit->magic	= bit1.magic;
+		bit->sequence	= bit1.sequence;
+		bit->time	= bit1.time;
+		bit->sector	= bit1.sector;
+		bit->bytes	= bit1.bytes;
+		bit->action	= bit1.action;
+		bit->pid	= bit1.pid;
+		bit->device	= bit1.device;
+		bit->cpu	= bit1.cpu;
+		bit->error	= bit1.error;
+		bit->pdu_len	= bit1.pdu_len;
+	}
+
+	return 1;
+}
+
 static int process(FILE **fp, char *devname, char *file, unsigned int cpu)
 {
 #	define SWAP_BITS() do {						\
@@ -145,7 +191,6 @@ static int process(FILE **fp, char *devname, char *file, unsigned int cpu)
 	FILE *ifp, *ofp;
 	__u32 save_device = 0, save_sequence = 0;
 	__u64 save_time = 0;
-	struct blk_io_trace bit1;
 	struct blk_io_trace2 *bit_save = NULL;
 	struct blk_io_trace2 *bit = malloc(sizeof(struct blk_io_trace2));
 	unsigned int ngood = 0;
@@ -173,37 +218,16 @@ static int process(FILE **fp, char *devname, char *file, unsigned int cpu)
 	}
 
 	ofp = *fp;
-	while ((n = fread(&bit1, sizeof(struct blk_io_trace), 1, ifp)) == 1) {
+	while (read_trace(ifp, bit)) {
 		if (ferror(ifp)) {
 			clearerr(ifp);
 			perror("fread");
 			break;
 		}
-		if (data_is_native == -1)
-			check_data_endianness(bit1.magic);
-
-		bit_trace_to_cpu(&bit1);
-
-		bit->magic	= bit1.magic;
-		bit->sequence	= bit1.sequence;
-		bit->time	= bit1.time;
-		bit->sector	= bit1.sector;
-		bit->bytes	= bit1.bytes;
-		bit->action	= bit1.action;
-		bit->pid	= bit1.pid;
-		bit->device	= bit1.device;
-		bit->cpu	= bit1.cpu;
-		bit->error	= bit1.error;
-		bit->pdu_len	= bit1.pdu_len;
 
 		if (!CHECK_MAGIC(bit->magic)) {
 			INC_BAD("bad trace");
 			continue;
-		}
-
-		if ((bit->magic & 0xff) != SUPPORTED_VERSION) {
-			fprintf(stderr, "unsupported trace version\n");
-			break;
 		}
 
 		if (bit->pdu_len) {
@@ -258,7 +282,7 @@ static int process(FILE **fp, char *devname, char *file, unsigned int cpu)
 		SWAP_BITS();
 	}
 
-	if (n == 0 && !feof(ifp))
+	if (!feof(ifp))
 		fprintf(stderr,"%s: fread failed %d/%s\n",
 		        file, errno, strerror(errno));
 	fclose(ifp);
