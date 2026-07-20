@@ -191,6 +191,13 @@ Outputs version
 Sets run time to the number of seconds specified  
 .RE
 
+\-\-trace\-version=\fI1|2\fR
+.RS
+Selects the trace protocol version requested from the kernel. Requesting
+version 1 forces blktrace to use the old \fBBLKTRACESETUP\fR ioctl, while
+version 2 (the default) uses \fBBLKTRACESETUP2\fR.
+.RE
+
 
 .SH FILTER MASKS
 The following masks may be passed with the \fI\-a\fR command line

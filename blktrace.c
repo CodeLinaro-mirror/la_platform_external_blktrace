@@ -283,6 +283,7 @@ static unsigned long long act_mask = ~0U;
 static int kill_running_trace;
 static int stop_watch;
 static int piped_output;
+static int trace_ver;
 
 static char *debugfs_path = "/sys/kernel/debug";
 static char *output_name;
@@ -328,6 +329,10 @@ static int *cl_fds;
 
 static int (*handle_pfds)(struct tracer *, int, int);
 static int (*handle_list)(struct tracer_devpath_head *, struct list_head *);
+
+enum {
+	OPT_TRACE_VERSION = 256,
+};
 
 #define S_OPTS	"d:a:A:r:o:kw:vVb:n:D:lh:p:sI:"
 static struct option l_opts[] = {
@@ -434,6 +439,12 @@ static struct option l_opts[] = {
 		.val = 's'
 	},
 	{
+		.name = "trace-version",
+		.has_arg = required_argument,
+		.flag = NULL,
+		.val = OPT_TRACE_VERSION
+	},
+	{
 		.name = NULL,
 	}
 };
@@ -455,6 +466,7 @@ static char usage_str[] = "\n\n" \
         "[ -I <devs file>     | --input-devs=<devs file>]\n" \
         "[ -v <version>       | --version]\n" \
         "[ -V <version>       | --version]\n" \
+        "[ --trace-version=<1|2> ]\n" \
 
 	"\t-d Use specified device. May also be given last after options\n" \
 	"\t-r Path to mounted debugfs, defaults to /sys/kernel/debug\n" \
@@ -471,7 +483,8 @@ static char usage_str[] = "\n\n" \
 	"\t-s Make the network client NOT use sendfile() to transfer data\n" \
 	"\t-I Add devices found in <devs file>\n" \
 	"\t-v Print program version info\n" \
-	"\t-V Print program version info\n\n";
+	"\t-V Print program version info\n" \
+	"\t--trace-version Request trace protocol version 1 or 2 from the kernel\n\n";
 
 static void clear_events(struct pollfd *pfd)
 {
@@ -2244,6 +2257,13 @@ static int handle_args(int argc, char *argv[])
 		case 's':
 			net_use_sendfile = 0;
 			break;
+		case OPT_TRACE_VERSION:
+			trace_ver = atoi(optarg);
+			if (trace_ver != 1 && trace_ver != 2) {
+				show_usage(argv[0]);
+				exit(1);
+			}
+			break;
 		default:
 			show_usage(argv[0]);
 			exit(1);
@@ -2714,7 +2734,7 @@ static int run_tracers(void)
 	if (net_mode == Net_client)
 		printf("blktrace: connecting to %s\n", hostname);
 
-	if (setup_buts2()) {
+	if (trace_ver == 1 || setup_buts2()) {
 		if (setup_buts()) {
 			done = 1;
 			return 1;
