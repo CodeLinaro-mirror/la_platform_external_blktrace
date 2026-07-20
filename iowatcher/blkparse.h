@@ -39,6 +39,7 @@ struct trace {
 	u64 len;
 	char *start;
 	char *cur;
+	int version;
 	struct blk_io_trace2 *io;
 	u64 start_timestamp;
 	struct timespec abs_start_time;

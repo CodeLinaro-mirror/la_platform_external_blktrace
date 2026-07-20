@@ -288,10 +288,74 @@ static void handle_notify(struct trace *trace)
 	}
 }
 
+/*
+ * Count how many consecutive well-formed traces the input holds when parsed
+ * with the given trace version.
+ */
+static int count_traces(struct trace *trace, int version)
+{
+	size_t hdr = (version == BLK_IO_TRACE2_VERSION) ?
+			sizeof(struct blk_io_trace2) : sizeof(struct blk_io_trace);
+	char *p = trace->start;
+	char *end = trace->start + trace->len;
+	int n = 0;
+
+	while (n < 16) {
+		struct blk_io_trace *io = (struct blk_io_trace *)p;
+		int pdu_len;
+
+		if (p == end)			/* traces tile up to the end */
+			break;
+		if (p + hdr > end)
+			break;
+		if (!CHECK_MAGIC(io))
+			break;
+
+		if (version == BLK_IO_TRACE2_VERSION)
+			pdu_len = ((struct blk_io_trace2 *)p)->pdu_len;
+		else
+			pdu_len = io->pdu_len;
+
+		p += hdr + pdu_len;
+		n++;
+	}
+
+	return n;
+}
+
+/*
+ * A recent blkparse always emits 'struct blk_io_trace2', while an old blkparse
+ * emits 'struct blk_io_trace'. As both share the same magic for version 1
+ * traces, the on-disk layout cannot be told apart by the version alone. Pick
+ * the layout that parses the input cleanly.
+ */
+static int detect_trace_version(struct trace *trace)
+{
+	struct blk_io_trace *io = (struct blk_io_trace *)trace->start;
+
+	if ((io->magic & 0xff) == BLK_IO_TRACE2_VERSION)
+		return BLK_IO_TRACE2_VERSION;
+
+	if (count_traces(trace, BLK_IO_TRACE2_VERSION) >=
+	    count_traces(trace, BLK_IO_TRACE_VERSION))
+		return BLK_IO_TRACE2_VERSION;
+
+	return BLK_IO_TRACE_VERSION;
+}
+
 static void trace_convert_io(struct trace *trace)
 {
 	struct blk_io_trace *old = (struct blk_io_trace *)trace->cur;
 	struct blk_io_trace2 *io;
+
+	if (trace->version == BLK_IO_TRACE2_VERSION) {
+		struct blk_io_trace2 *new = (struct blk_io_trace2 *)trace->cur;
+
+		io = realloc(trace->io, sizeof(*new) + new->pdu_len);
+		memcpy(io, new, sizeof(*new) + new->pdu_len);
+		trace->io = io;
+		return;
+	}
 
 	io = realloc(trace->io, sizeof(struct blk_io_trace2) + old->pdu_len);
 
@@ -316,10 +380,12 @@ static void trace_convert_io(struct trace *trace)
 
 int next_record(struct trace *trace)
 {
+	int hdr = (trace->version == BLK_IO_TRACE2_VERSION) ?
+		  sizeof(struct blk_io_trace2) : sizeof(struct blk_io_trace);
 	int skip = trace->io->pdu_len;
 	u64 offset;
 
-	trace->cur += sizeof(struct blk_io_trace) + skip;
+	trace->cur += hdr + skip;
 	offset = trace->cur - trace->start;
 	if (offset >= trace->len)
 		return 1;
@@ -857,6 +923,7 @@ struct trace *open_trace(char *filename)
 	trace->len = st.st_size;
 	trace->start = p;
 	trace->cur = p;
+	trace->version = detect_trace_version(trace);
 	trace_convert_io(trace);
 	return trace;
 
