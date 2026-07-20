@@ -42,7 +42,7 @@
 #include "blkiomon.h"
 
 struct trace {
-	struct blk_io_trace bit;
+	struct blk_io_trace2 bit;
 	struct rb_node node;
 	struct trace *next;
 	long sequence;
@@ -105,7 +105,7 @@ static long leftover = 0, driverdata = 0, match = 0, mismatch = 0, sequence = 0;
 
 static void dump_bit(struct trace *t, const char *descr)
 {
-	struct blk_io_trace *bit = &t->bit;
+	struct blk_io_trace2 *bit = &t->bit;
 
 	if (!debug.fn)
 		return;
@@ -116,7 +116,7 @@ static void dump_bit(struct trace *t, const char *descr)
 	fprintf(debug.fp, "time     %16ld\n", (unsigned long)bit->time);
 	fprintf(debug.fp, "sector   %16ld\n", (unsigned long)bit->sector);
 	fprintf(debug.fp, "bytes    %16d\n", bit->bytes);
-	fprintf(debug.fp, "action   %16x\n", bit->action);
+	fprintf(debug.fp, "action   %16llx\n", (unsigned long long)bit->action);
 	fprintf(debug.fp, "pid      %16d\n", bit->pid);
 	fprintf(debug.fp, "device   %16d\n", bit->device);
 	fprintf(debug.fp, "cpu      %16d\n", bit->cpu);
@@ -128,8 +128,8 @@ static void dump_bit(struct trace *t, const char *descr)
 
 static void dump_bits(struct trace *t1, struct trace *t2, const char *descr)
 {
-	struct blk_io_trace *bit1 = &t1->bit;
-	struct blk_io_trace *bit2 = &t2->bit;
+	struct blk_io_trace2 *bit1 = &t1->bit;
+	struct blk_io_trace2 *bit2 = &t2->bit;
 
 	if (!debug.fn)
 		return;
@@ -143,7 +143,9 @@ static void dump_bits(struct trace *t1, struct trace *t2, const char *descr)
 	fprintf(debug.fp, "sector   %16ld %16ld\n",
 		(unsigned long)bit1->sector, (unsigned long)bit2->sector);
 	fprintf(debug.fp, "bytes    %16d %16d\n", bit1->bytes, bit2->bytes);
-	fprintf(debug.fp, "action   %16x %16x\n", bit1->action, bit2->action);
+	fprintf(debug.fp, "action   %16llx %16llx\n",
+		(unsigned long long)bit1->action,
+		(unsigned long long)bit2->action);
 	fprintf(debug.fp, "pid      %16d %16d\n", bit1->pid, bit2->pid);
 	fprintf(debug.fp, "device   %16d %16d\n", bit1->device, bit2->device);
 	fprintf(debug.fp, "cpu      %16d %16d\n", bit1->cpu, bit2->cpu);
@@ -305,8 +307,8 @@ static void *blkiomon_interval(void *data)
 
 #define BLK_DATADIR(a) (((a) >> BLK_TC_SHIFT) & (BLK_TC_READ | BLK_TC_WRITE))
 
-static int blkiomon_account(struct blk_io_trace *bit_d,
-			    struct blk_io_trace *bit_c)
+static int blkiomon_account(struct blk_io_trace2 *bit_d,
+			    struct blk_io_trace2 *bit_c)
 {
 	struct dstat *dstat;
 	struct blkiomon_stat *p;
@@ -371,7 +373,7 @@ static void blkiomon_store_trace(struct trace *t)
 	thash[i] = t;
 }
 
-static struct trace *blkiomon_fetch_trace(struct blk_io_trace *bit)
+static struct trace *blkiomon_fetch_trace(struct blk_io_trace2 *bit)
 {
 	int i = bit->sector % TRACE_HASH_SIZE;
 	struct trace *t, *prev = NULL;
@@ -428,7 +430,7 @@ static struct trace *blkiomon_do_trace(struct trace *t)
 	return t_old;
 }
 
-static int blkiomon_dump_drvdata(struct blk_io_trace *bit, void *pdu_buf)
+static int blkiomon_dump_drvdata(struct blk_io_trace2 *bit, void *pdu_buf)
 {
 	if (!drvdata.fn)
 		return 0;
@@ -451,8 +453,10 @@ failed:
 static int blkiomon_do_fifo(void)
 {
 	struct trace *t;
-	struct blk_io_trace *bit;
+	struct blk_io_trace2 *bit;
+	struct blk_io_trace bit1;
 	void *pdu_buf = NULL;
+	void *p;
 
 	t = blkiomon_alloc_trace();
 	if (!t)
@@ -468,13 +472,14 @@ static int blkiomon_do_fifo(void)
 					"blkiomon: could not read trace");
 			break;
 		}
-		if (fread(bit, sizeof(*bit), 1, ifp) != 1) {
+		bit1.magic = magic;
+		p = (void *) ((u8 *)&bit1 + sizeof(__u32));
+		if (fread(p, sizeof(bit1) - sizeof(__u32), 1, ifp) != 1) {
 			if (!feof(ifp))
 				fprintf(stderr,
 					"blkiomon: could not read trace");
 			break;
 		}
-		bit->magic = magic;
 		if (ferror(ifp)) {
 			clearerr(ifp);
 			fprintf(stderr, "blkiomon: error while reading trace");
@@ -487,7 +492,20 @@ static int blkiomon_do_fifo(void)
 		}
 
 		/* endianess */
-		bit_trace_to_cpu(bit);
+		bit_trace_to_cpu(&bit1);
+
+		bit->magic	= bit1.magic;
+		bit->sequence	= bit1.sequence;
+		bit->time	= bit1.time;
+		bit->sector	= bit1.sector;
+		bit->bytes	= bit1.bytes;
+		bit->action	= bit1.action;
+		bit->pid	= bit1.pid;
+		bit->device	= bit1.device;
+		bit->cpu	= bit1.cpu;
+		bit->error	= bit1.error;
+		bit->pdu_len	= bit1.pdu_len;
+
 		if (verify_trace(bit->magic)) {
 			fprintf(stderr, "blkiomon: bad trace\n");
 			break;
