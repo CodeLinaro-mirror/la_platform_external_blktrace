@@ -146,7 +146,7 @@ static struct pending_io *io_hash_table_search(u64 sector, u32 dev)
 	return NULL;
 }
 
-static struct pending_io *hash_queued_io(struct blk_io_trace *io)
+static struct pending_io *hash_queued_io(struct blk_io_trace2 *io)
 {
 	struct pending_io *pio;
 	int ret;
@@ -165,7 +165,7 @@ static struct pending_io *hash_queued_io(struct blk_io_trace *io)
 	return pio;
 }
 
-static struct pending_io *hash_dispatched_io(struct blk_io_trace *io)
+static struct pending_io *hash_dispatched_io(struct blk_io_trace2 *io)
 {
 	struct pending_io *pio;
 
@@ -179,7 +179,7 @@ static struct pending_io *hash_dispatched_io(struct blk_io_trace *io)
 	return pio;
 }
 
-static struct pending_io *hash_completed_io(struct blk_io_trace *io)
+static struct pending_io *hash_completed_io(struct blk_io_trace2 *io)
 {
 	struct pending_io *pio;
 
@@ -257,7 +257,7 @@ static struct pid_map *process_hash_insert(u32 pid, char *name)
 
 static void handle_notify(struct trace *trace)
 {
-	struct blk_io_trace *io = trace->io;
+	struct blk_io_trace2 *io = trace->io;
 	void *payload = (char *)io + sizeof(*io);
 	int pdu_len = io->pdu_len;
 	u32 two32[2];
@@ -288,27 +288,53 @@ static void handle_notify(struct trace *trace)
 	}
 }
 
+static void trace_convert_io(struct trace *trace)
+{
+	struct blk_io_trace *old = (struct blk_io_trace *)trace->cur;
+	struct blk_io_trace2 *io;
+
+	io = realloc(trace->io, sizeof(struct blk_io_trace2) + old->pdu_len);
+
+	io->magic	= old->magic;
+	io->sequence	= old->sequence;
+	io->time	= old->time;
+	io->sector	= old->sector;
+	io->bytes	= old->bytes;
+	io->action	= old->action;
+	io->pid		= old->pid;
+	io->device	= old->device;
+	io->cpu		= old->cpu;
+	io->error	= old->error;
+	io->pdu_len	= old->pdu_len;
+
+	if (io->pdu_len)
+		memcpy((char *)io + sizeof(*io),
+		       (char *)old + sizeof(*old), old->pdu_len);
+
+	trace->io = io;
+}
+
 int next_record(struct trace *trace)
 {
 	int skip = trace->io->pdu_len;
 	u64 offset;
 
-	trace->cur += sizeof(*trace->io) + skip;
+	trace->cur += sizeof(struct blk_io_trace) + skip;
 	offset = trace->cur - trace->start;
 	if (offset >= trace->len)
 		return 1;
 
-	trace->io = (struct blk_io_trace *)trace->cur;
+	trace_convert_io(trace);
 	return 0;
 }
 
 void first_record(struct trace *trace)
 {
 	trace->cur = trace->start;
-	trace->io = (struct blk_io_trace *)trace->cur;
+	trace_convert_io(trace);
 }
 
-static int is_io_event(struct blk_io_trace *test)
+static int is_io_event(struct blk_io_trace2 *test)
 {
 	char *message;
 	if (!(test->action & BLK_TC_ACT(BLK_TC_NOTIFY)))
@@ -332,30 +358,11 @@ static int is_io_event(struct blk_io_trace *test)
 
 u64 find_last_time(struct trace *trace)
 {
-	char *p = trace->start + trace->len;
-	struct blk_io_trace *test;
-	int search_len = 0;
 	u64 found = 0;
 
-	if (trace->len < sizeof(*trace->io))
+	if (trace->len < sizeof(struct blk_io_trace))
 		return 0;
-	p -= sizeof(*trace->io);
-	while (p >= trace->start) {
-		test = (struct blk_io_trace *)p;
-		if (CHECK_MAGIC(test) && is_io_event(test)) {
-			u64 offset = p - trace->start;
-			if (offset + sizeof(*test) + test->pdu_len == trace->len) {
-				return test->time;
-			}
-		}
-		p--;
-		search_len++;
-		if (search_len > 8192) {
-			break;
-		}
-	}
 
-	/* searching backwards didn't work out, we'll have to scan the file */
 	first_record(trace);
 	while (1) {
 		if (is_io_event(trace->io))
@@ -373,7 +380,7 @@ static int parse_fio_bank_message(struct trace *trace, u64 *bank_ret, u64 *offse
 	char *s;
 	char *next;
 	char *message;
-	struct blk_io_trace *test = trace->io;
+	struct blk_io_trace2 *test = trace->io;
 	int len = test->pdu_len;
 	u64 bank;
 	u64 offset;
@@ -428,7 +435,7 @@ out:
 	return -1;
 }
 
-static struct dev_info *lookup_dev(struct trace *trace, struct blk_io_trace *io)
+static struct dev_info *lookup_dev(struct trace *trace, struct blk_io_trace2 *io)
 {
 	u32 dev = io->device;
 	int i;
@@ -481,7 +488,7 @@ static void map_devices(struct trace *trace)
 	}
 }
 
-static u64 map_io(struct trace *trace, struct blk_io_trace *io)
+static u64 map_io(struct trace *trace, struct blk_io_trace2 *io)
 {
 	struct dev_info *di = lookup_dev(trace, io);
 	u64 val = trace->io->sector << 9;
@@ -532,7 +539,7 @@ void find_extreme_offsets(struct trace *trace, u64 *min_ret, u64 *max_ret, u64 *
 
 static void check_io_types(struct trace *trace)
 {
-	struct blk_io_trace *io = trace->io;
+	struct blk_io_trace2 *io = trace->io;
 	int action = io->action & BLK_TA_MASK;
 
 	if (!(io->action & BLK_TC_ACT(BLK_TC_NOTIFY))) {
@@ -850,7 +857,7 @@ struct trace *open_trace(char *filename)
 	trace->len = st.st_size;
 	trace->start = p;
 	trace->cur = p;
-	trace->io = (struct blk_io_trace *)p;
+	trace_convert_io(trace);
 	return trace;
 
 fail_fd:
@@ -901,7 +908,7 @@ static inline int io_event(struct trace *trace)
 void add_tput(struct trace *trace, struct graph_line_data *writes_gld,
 	      struct graph_line_data *reads_gld)
 {
-	struct blk_io_trace *io = trace->io;
+	struct blk_io_trace2 *io = trace->io;
 	struct graph_line_data *gld;
 	int action = io->action & BLK_TA_MASK;
 	int seconds;
@@ -962,7 +969,7 @@ static struct pid_map *get_pid_map(struct trace_file *tf, u32 pid)
 
 void add_io(struct trace *trace, struct trace_file *tf)
 {
-	struct blk_io_trace *io = trace->io;
+	struct blk_io_trace2 *io = trace->io;
 	int action = io->action & BLK_TA_MASK;
 	u64 offset;
 	int index;
@@ -999,7 +1006,7 @@ void add_io(struct trace *trace, struct trace_file *tf)
 void add_pending_io(struct trace *trace, struct graph_line_data *gld)
 {
 	unsigned int seconds;
-	struct blk_io_trace *io = trace->io;
+	struct blk_io_trace2 *io = trace->io;
 	int action = io->action & BLK_TA_MASK;
 	double avg;
 	struct pending_io *pio;
@@ -1068,7 +1075,7 @@ account_io:
 void add_completed_io(struct trace *trace,
 		      struct graph_line_data *latency_gld)
 {
-	struct blk_io_trace *io = trace->io;
+	struct blk_io_trace2 *io = trace->io;
 	int seconds;
 	int action = io->action & BLK_TA_MASK;
 	struct pending_io *pio;
@@ -1107,7 +1114,7 @@ void add_completed_io(struct trace *trace,
 
 void add_iop(struct trace *trace, struct graph_line_data *gld)
 {
-	struct blk_io_trace *io = trace->io;
+	struct blk_io_trace2 *io = trace->io;
 	int action = io->action & BLK_TA_MASK;
 	int seconds;
 
