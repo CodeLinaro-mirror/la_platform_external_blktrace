@@ -36,8 +36,9 @@ static int fd;
 static void *cur_map = MAP_FAILED;
 static off_t cur_min, cur, cur_max, total_size;
 static size_t len;
-static struct blk_io_trace *next_t;
+static struct blk_io_trace2 *next_t;
 static long pgsz;
+static int trace_version;
 
 int data_is_native = -1;
 
@@ -75,6 +76,38 @@ static inline size_t convert_to_cpu(struct blk_io_trace *t,
 		tp->pid		= be32_to_cpu(t->pid);
 		tp->device	= be32_to_cpu(t->device);
 		tp->cpu		= be16_to_cpu(t->cpu);
+		tp->error	= be16_to_cpu(t->error);
+		tp->pdu_len	= be16_to_cpu(t->pdu_len);
+	}
+
+	if (tp->pdu_len) {
+		*pdu = malloc(tp->pdu_len);
+		memcpy(*pdu, t+1, tp->pdu_len);
+	} else
+		*pdu = NULL;
+
+	return sizeof(*t) + tp->pdu_len;
+}
+
+static inline size_t convert_to_cpu2(struct blk_io_trace2 *t,
+                                     struct blk_io_trace2 *tp,
+				     void **pdu)
+{
+	if (data_is_native == -1)
+		check_data_endianness(t->magic);
+
+	if (data_is_native)
+		memcpy(tp, t, sizeof(*tp));
+	else {
+		tp->magic	= be32_to_cpu(t->magic);
+		tp->sequence	= be32_to_cpu(t->sequence);
+		tp->time	= be64_to_cpu(t->time);
+		tp->sector	= be64_to_cpu(t->sector);
+		tp->bytes	= be32_to_cpu(t->bytes);
+		tp->action	= be64_to_cpu(t->action);
+		tp->pid		= be32_to_cpu(t->pid);
+		tp->device	= be32_to_cpu(t->device);
+		tp->cpu		= be32_to_cpu(t->cpu);
 		tp->error	= be16_to_cpu(t->error);
 		tp->pdu_len	= be16_to_cpu(t->pdu_len);
 	}
@@ -137,6 +170,72 @@ void cleanup_ifile(void)
 	close(fd);
 }
 
+static inline int magic_ok(__u32 magic)
+{
+	if (!data_is_native)
+		magic = be32_to_cpu(magic);
+
+	return CHECK_MAGIC(magic);
+}
+
+static int count_traces(int version)
+{
+	size_t hdr = (version == SUPPORTED_VERSION2) ?
+			sizeof(struct blk_io_trace2) : sizeof(struct blk_io_trace);
+	off_t pos = cur;
+	int n = 0;
+
+	while (n < 16) {
+		void *p;
+		__u16 pdu_len;
+
+		if (pos == total_size)
+			break;
+		if ((pos + (off_t)hdr) > cur_max)
+			break;
+
+		p = cur_map + (pos - cur_min);
+		if (!magic_ok(((struct blk_io_trace *)p)->magic))
+			break;
+
+		if (version == SUPPORTED_VERSION2)
+			pdu_len = ((struct blk_io_trace2 *)p)->pdu_len;
+		else
+			pdu_len = ((struct blk_io_trace *)p)->pdu_len;
+		if (!data_is_native)
+			pdu_len = be16_to_cpu(pdu_len);
+
+		pos += hdr + pdu_len;
+		n++;
+	}
+
+	return n;
+}
+
+/*
+ * New blkparse always emits 'struct blk_io_trace2', while an old blkparse
+ * emits 'struct blk_io_trace'. As both share the same magic for version 1
+ * traces, the on-disk layout cannot be told apart by the version alone. Pick
+ * the layout that parses the input cleanly.
+ */
+static int detect_trace_version(void)
+{
+	__u32 magic;
+
+	if (data_is_native)
+		magic = next_t->magic;
+	else
+		magic = be32_to_cpu(next_t->magic);
+
+	if ((magic & 0xff) == SUPPORTED_VERSION2)
+		return SUPPORTED_VERSION2;
+
+	if (count_traces(SUPPORTED_VERSION2) >= count_traces(SUPPORTED_VERSION))
+		return SUPPORTED_VERSION2;
+
+	return SUPPORTED_VERSION;
+}
+
 int next_trace(struct blk_io_trace2 *t, void **pdu)
 {
 	size_t this_len;
@@ -148,7 +247,18 @@ int next_trace(struct blk_io_trace2 *t, void **pdu)
 		}
 
 	next_t = cur_map + (cur - cur_min);
-	this_len = convert_to_cpu(next_t, t, pdu);
+
+	if (data_is_native == -1)
+		check_data_endianness(next_t->magic);
+
+	if (!trace_version)
+		trace_version = detect_trace_version();
+
+	if (trace_version == SUPPORTED_VERSION2)
+		this_len = convert_to_cpu2(next_t, t, pdu);
+	else
+		this_len = convert_to_cpu((struct blk_io_trace *) next_t,
+					  t, pdu);
 	cur += this_len;
 
 	return 1;
