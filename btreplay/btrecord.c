@@ -200,7 +200,7 @@ static inline void fatal(const char *errstring, const int exitval,
  * match - Return true if this trace is a proper QUEUE transaction
  * @action: Action field from trace
  */
-static inline int match(__u32 action)
+static inline int match(__u64 action)
 {
 	return ((action & 0xffff) == __BLK_TA_QUEUE) &&
 				       (action & BLK_TC_ACT(BLK_TC_QUEUE));
@@ -483,41 +483,92 @@ void handle_args(int argc, char *argv[])
 static int next_io(struct ifile_info *iip, struct io_spec *spec)
 {
 	ssize_t ret;
-	__u32 action;
+	__u64 action;
 	__u16 pdu_len;
+	__u32 magic;
+	int version;
 	struct blk_io_trace t;
+	struct blk_io_trace2 t2;
+	void *p;
 
 again:
-	ret = read(iip->ifd, &t, sizeof(t));
+	ret = read(iip->ifd, &magic, sizeof(magic));
 	if (ret < 0) {
 		fatal(iip->file_name, ERR_SYSCALL, "Read failed\n");
 		/*NOTREACHED*/
 	}
 	else if (ret == 0)
 		return 0;
-	else if (ret < (ssize_t)sizeof(t)) {
+	else if (ret < (ssize_t)sizeof(magic)) {
 		fprintf(stderr, "WARNING: Short read on %s (%d)\n", 
 			iip->file_name, (int)ret);
 		return 0;
 	}
 
 	if (data_is_native == -1)
-		check_data_endianness(t.magic);
+		check_data_endianness(magic);
 
 	assert(data_is_native >= 0);
-	if (data_is_native) {
-		spec->time = t.time;
-		spec->sector = t.sector;
-		spec->bytes = t.bytes;
-		action = t.action;
-		pdu_len = t.pdu_len;
+
+	version = (data_is_native ? magic : be32_to_cpu(magic)) & 0xff;
+
+	if (version == SUPPORTED_VERSION2) {
+		t2.magic = magic;
+		p = (void *) ((u8 *)&t2 + sizeof(__u32));
+		ret = read(iip->ifd, p, sizeof(t2) - sizeof(__u32));
+		if (ret < 0) {
+			fatal(iip->file_name, ERR_SYSCALL, "Read failed\n");
+			/*NOTREACHED*/
+		}
+		else if (ret < (ssize_t)(sizeof(t2) - sizeof(__u32))) {
+			fprintf(stderr, "WARNING: Short read on %s (%d)\n",
+				iip->file_name, (int)ret);
+			return 0;
+		}
+
+		if (data_is_native) {
+			spec->time = t2.time;
+			spec->sector = t2.sector;
+			spec->bytes = t2.bytes;
+			action = t2.action;
+			pdu_len = t2.pdu_len;
+		}
+		else {
+			spec->time = be64_to_cpu(t2.time);
+			spec->sector = be64_to_cpu(t2.sector);
+			spec->bytes = be32_to_cpu(t2.bytes);
+			action = be64_to_cpu(t2.action);
+			pdu_len = be16_to_cpu(t2.pdu_len);
+		}
 	}
 	else {
-		spec->time = be64_to_cpu(t.time);
-		spec->sector = be64_to_cpu(t.sector);
-		spec->bytes = be32_to_cpu(t.bytes);
-		action = be32_to_cpu(t.action);
-		pdu_len = be16_to_cpu(t.pdu_len);
+		t.magic = magic;
+		p = (void *) ((u8 *)&t + sizeof(__u32));
+		ret = read(iip->ifd, p, sizeof(t) - sizeof(__u32));
+		if (ret < 0) {
+			fatal(iip->file_name, ERR_SYSCALL, "Read failed\n");
+			/*NOTREACHED*/
+		}
+		else if (ret < (ssize_t)(sizeof(t) - sizeof(__u32))) {
+			fprintf(stderr, "WARNING: Short read on %s (%d)\n",
+				iip->file_name, (int)ret);
+			return 0;
+		}
+
+		if (data_is_native) {
+			spec->time = t.time;
+			spec->sector = t.sector;
+			spec->bytes = t.bytes;
+			action = t.action;
+			pdu_len = t.pdu_len;
+		}
+		else {
+			spec->time = be64_to_cpu(t.time);
+			spec->sector = be64_to_cpu(t.sector);
+			spec->bytes = be32_to_cpu(t.bytes);
+			action = be32_to_cpu(t.action);
+			pdu_len = be16_to_cpu(t.pdu_len);
+		}
 	}
 
 
