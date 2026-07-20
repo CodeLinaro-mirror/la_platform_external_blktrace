@@ -465,24 +465,12 @@ static int blkiomon_do_fifo(void)
 
 	while (up) {
 		__u32 magic;
+		int version;
 
 		if (fread(&magic, sizeof(magic), 1, ifp) != 1) {
 			if (!feof(ifp))
 				fprintf(stderr,
 					"blkiomon: could not read trace");
-			break;
-		}
-		bit1.magic = magic;
-		p = (void *) ((u8 *)&bit1 + sizeof(__u32));
-		if (fread(p, sizeof(bit1) - sizeof(__u32), 1, ifp) != 1) {
-			if (!feof(ifp))
-				fprintf(stderr,
-					"blkiomon: could not read trace");
-			break;
-		}
-		if (ferror(ifp)) {
-			clearerr(ifp);
-			fprintf(stderr, "blkiomon: error while reading trace");
 			break;
 		}
 
@@ -491,20 +479,57 @@ static int blkiomon_do_fifo(void)
 			break;
 		}
 
-		/* endianess */
-		bit_trace_to_cpu(&bit1);
+		version = (data_is_native ? magic : be32_to_cpu(magic)) & 0xff;
 
-		bit->magic	= bit1.magic;
-		bit->sequence	= bit1.sequence;
-		bit->time	= bit1.time;
-		bit->sector	= bit1.sector;
-		bit->bytes	= bit1.bytes;
-		bit->action	= bit1.action;
-		bit->pid	= bit1.pid;
-		bit->device	= bit1.device;
-		bit->cpu	= bit1.cpu;
-		bit->error	= bit1.error;
-		bit->pdu_len	= bit1.pdu_len;
+		if (version == SUPPORTED_VERSION2) {
+			bit->magic = magic;
+			p = (void *) ((u8 *)bit + sizeof(__u32));
+			if (fread(p, sizeof(*bit) - sizeof(__u32), 1, ifp) != 1) {
+				if (!feof(ifp))
+					fprintf(stderr,
+						"blkiomon: could not read trace");
+				break;
+			}
+			if (ferror(ifp)) {
+				clearerr(ifp);
+				fprintf(stderr,
+					"blkiomon: error while reading trace");
+				break;
+			}
+
+			/* endianess */
+			bit2_trace_to_cpu(bit);
+		} else {
+			bit1.magic = magic;
+			p = (void *) ((u8 *)&bit1 + sizeof(__u32));
+			if (fread(p, sizeof(bit1) - sizeof(__u32), 1, ifp) != 1) {
+				if (!feof(ifp))
+					fprintf(stderr,
+						"blkiomon: could not read trace");
+				break;
+			}
+			if (ferror(ifp)) {
+				clearerr(ifp);
+				fprintf(stderr,
+					"blkiomon: error while reading trace");
+				break;
+			}
+
+			/* endianess */
+			bit_trace_to_cpu(&bit1);
+
+			bit->magic	= bit1.magic;
+			bit->sequence	= bit1.sequence;
+			bit->time	= bit1.time;
+			bit->sector	= bit1.sector;
+			bit->bytes	= bit1.bytes;
+			bit->action	= bit1.action;
+			bit->pid	= bit1.pid;
+			bit->device	= bit1.device;
+			bit->cpu	= bit1.cpu;
+			bit->error	= bit1.error;
+			bit->pdu_len	= bit1.pdu_len;
+		}
 
 		if (verify_trace(bit->magic)) {
 			fprintf(stderr, "blkiomon: bad trace\n");
