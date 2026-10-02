@@ -897,7 +897,6 @@ static void plot_cpu(struct plot *plot, unsigned int max_seconds, char *label,
 	char *color;
 	double avg = 0;
 	int ymax;
-	int plotted = 0;
 
 	if (active_graphs[active_index] == 0)
 		return;
@@ -971,7 +970,6 @@ static void plot_cpu(struct plot *plot, unsigned int max_seconds, char *label,
 					svg_line_graph(plot, gld, color, avg + 30, 95);
 					snprintf(line, line_len, " CPU %d\n", i - 1);
 					svg_add_legend(plot, tf->label, line, color);
-					plotted++;
 					break;
 				}
 
